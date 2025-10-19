@@ -1,15 +1,11 @@
 *
 
+!.gitignore
 !*/
 !*.c
 !*.h
-!.gitignore
 !Makefile
-!*.md
+!README.md
 
 *.o
 *.out
-todo.md
-TODO.md
-thinking.md
-THINKING.md
