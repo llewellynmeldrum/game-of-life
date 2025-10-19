@@ -5,8 +5,15 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <libgen.h>
 #define adjust 10'000'000
 #define msleep(ms) usleep(ms*1000)
+
+#define min(a,b) (a<=b?a:b)
+#define max(a,b) (a>=b?a:b)
+// useful macro helpers
+#define __MACRO_TO_STR(ARG) 	#ARG
+#define MACRO_TO_STR(ARG)	__MACRO_TO_STR(ARG)
 
 #define randf(max)  (((double)( (rand()*adjust)%(max*adjust) ))/10'000'000.0)
 #ifdef DEBUG_PRINTING
@@ -24,6 +31,19 @@
 	extern bool show_pretty_print_guide;
 extern char copybuf[];
 
+char COMMIT_HASH[8];
+static inline char *get_commit_hash(size_t len) {
+	FILE* fp;
+	fp = popen("git rev-parse --short=7 HEAD", "r+");
+	if (!fp) {
+		perror("popen()");
+		return NULL;
+	}
+	fscanf(fp, "%7s", COMMIT_HASH);
+	pclose(fp);
+	return COMMIT_HASH;
+}
+
 ssize_t GET_TERM_COLS();
 void LOG_UPPER_SEPARATOR();
 void LOG_LOWER_SEPARATOR();
@@ -37,6 +57,7 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
 #else
 	#define log(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #endif
+
 
 #define logexit(n)do {				\
 	if(n == EXIT_SUCCESS){ log(SET_GREEN);}	\
@@ -119,12 +140,18 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
 
 #define SET_CLEAR "\033[0m"
 
+#define SET_WHITE "\033[37m"
 #define SET_RED "\033[1;31m"
 #define SET_GREEN "\033[1;32m"
 #define SET_BLUE "\033[0;34m"
 #define SET_PURPLE "\033[0;35m"
 #define SET_ORANGE "\033[48:2:255:165:1m"
 
+#define SET_BGWHITE 	"\033[51m"
+#define SET_BGRED 	"\033[41m"
+#define SET_BGGREEN 	"\033[42m"
+#define SET_BGBLUE 	"\033[44m"
+#define SET_BGPURPLE 	"\033[45m"
 
 #define SET_REV "\033[7m"
 
@@ -135,9 +162,32 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
 
 #define SET_NOREV "\033[27m"
 #define SET_NOUNDERLINE "\033[24m"
-#define SET_NOBOLD "\033[21m"
+#define SET_NOBOLD "\033[22m"
 
 #define SET(s) "\033["s"m"
+
+#define logln(fmt, ...) \
+fprintf(stderr, SET_BOLD"[%s:%d] %s %s "fmt, __FILE__, __LINE__, SET_CLEAR, ##__VA_ARGS__)
+
+#define _assert(truth) if(!(truth)) {__ASSERTION_FAILED(truth);}
+#define __ASSERTION_FAILED(TRUTH) 	\
+fprintf(stderr, SET_RED SET_NOBOLD\
+	"\nASSERTION FAILED IN -> "	\
+	SET_CLEAR SET_UNDERLINE "%s() @%s:%d\n"	\
+	SET_CLEAR SET_BOLD "--> (%s) == " SET_RED SET_NOBOLD " FALSE\n\n",						\
+	__func__, __FILE__, __LINE__, #TRUTH);				\
+	logexit(EXIT_FAILURE)
+
+#define logfatal_ln_exit(fmt, ...) \
+fprintf(stderr, "%s%s%s[%s:%d] IN --> %s(): %s "fmt,		\
+		(SET_BOLD), (SET_RED), (SET_NOBOLD),		\
+		__FILE__, __LINE__, __func__, (SET_CLEAR)	\
+		, ##__VA_ARGS__);				\
+logexit(EXIT_FAILURE)
+
+
+#define logfn(fmt, ...) \
+fprintf(stderr,"[%s:%d:%s()]: " fmt, __FILE__, __LINE__, __func__,##__VA_ARGS__)
 
 #endif // LOG_H
 /* PROPOSED LOGGING LEVELS:
