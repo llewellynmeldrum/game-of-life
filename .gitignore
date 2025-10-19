@@ -5,4 +5,11 @@
 !*.h
 !.gitignore
 !Makefile
-!README.md
+!*.md
+
+*.o
+*.out
+todo.md
+TODO.md
+thinking.md
+THINKING.md
