@@ -13,12 +13,47 @@
 #define SCR_WIDTH 800
 #define SCR_HEIGHT 600
 
-#define min(a,b) (a<=b?a:b)
-#define max(a,b) (a>=b?a:b)
+#define MAX_FRAMES 512
 
 
-#define SDL_RENDER_FLAGS SDL_RENDERER_SOFTWARE
-// #define SDL_RENDER_FLAGS SDL_RENDERER_ACCELERATED // enable for gpu acceleration
+// these are the values exposed to the programmer
+#define COMPUTE CPU
+#define RENDER	CPU
+
+#define VER_MAJOR 0
+#define VER_MINOR 1
+
+#define PROG_DESCRIPTION "Everything CPU, no bitpacking, extremely simple."
+
+
+/* these should be in a header*/
+#define CPU "C"
+#define GPU "G"
+
+
+// actual macros
+#define VER_STR 	"v"			\
+			MACRO_TO_STR(VER_MAJOR)	\
+			"."			\
+			MACRO_TO_STR(VER_MINOR)
+
+
+#define PROG_NAME	COMPUTE		\
+			RENDER "_"	\
+			VER_STR
+
+static uint32_t SDL_RENDER_FLAGS = SDL_RENDERER_SOFTWARE;
+
+static inline void SET_RENDER_FLAGS() {
+	if (COMPUTE[0] == 'C') {
+		SDL_RENDER_FLAGS |= SDL_RENDERER_SOFTWARE;
+	} else if (COMPUTE[0] == 'G') {
+		SDL_RENDER_FLAGS |= SDL_RENDERER_ACCELERATED;
+	}
+}
+
+
+
 /* SDL_COLORS */
 const SDL_Color white = { 0xFF, 0xFF, 0xFF, SDL_ALPHA_OPAQUE };
 const SDL_Color black = { 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE };
@@ -36,7 +71,7 @@ typedef enum {
 	ALIVE
 } CELL_STATE;
 /* LOCAL HELPERS */
-#define get_cell(x,y) (cells[y][x])
+#define get_cell(x,y) (board[y][x])
 
 
 
@@ -51,12 +86,12 @@ static void draw();
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
-static int cells_cols, cells_rows;
+static int board_cols, board_rows;
 static int cell_width_px, cell_height_px;
 bool running = true;
 
 static int scaling_factor = 4;
-static CELL_STATE **cells;
+static CELL_STATE **board;
 
 // perf
 uint64_t SDL_CLOCKS_PER_SEC;
@@ -92,12 +127,13 @@ void update_metrics(double ms_input, double ms_update, double ms_draw) {
 	RingBuffer_put(&fps_rb, fps);
 }
 static inline void set_cell(int x, int y, CELL_STATE new_val) {
-	CELL_STATE prev_val = cells[y][x];
-	cells[y][x] = new_val;
+	CELL_STATE prev_val = board[y][x];
+	board[y][x] = new_val;
 	// dead->alive ++
 	// alive->dead --
 	if (prev_val == ALIVE && new_val == DEAD) global_pop_count--;
 	if (prev_val == DEAD && new_val == ALIVE) global_pop_count++;
+
 }
 
 int main() {
@@ -125,6 +161,7 @@ int main() {
 
 		update_metrics(ms_input, ms_update, ms_draw);
 		frame_count++;
+		if (frame_count >= MAX_FRAMES) break;
 	}
 	s_execution_time = s_between(prog_t0, measure_time());
 	ms_execution_time = ms_between(prog_t0, measure_time());
@@ -134,8 +171,15 @@ int main() {
 //	RingBuffer_log(ms_draw_rb, "ms");
 //	RingBuffer_log(ms_frametime_rb, "ms");
 //	RingBuffer_log(fps_rb, "fps");
-	log("framecount:%llu, took %0.0lfms\n", frame_count, s_execution_time * 1000.0);
-	log("averages:\n");
+////	log("   cell size| %dx%d\n", cell_width_px, cell_height_px);
+
+
+	log("\nSimulation ended.\n" );
+	log("\tframecount:      %llu frames\n", frame_count);
+	log("\ttook:            %0.0lfms\n", s_execution_time * 1000.0);
+	log("\tfinal popcount:  %zu\n",	global_pop_count);
+	log("\tgenerations:     %zu\n",	generation_count);
+	log("Stats:\n");
 
 
 
@@ -150,37 +194,46 @@ int main() {
 	log("\tdraw:                %0.2lfms              %0.1lf%%\n ", 	ms_draw_avg 	, ms_draw_avg / ms_frametime_avg * 100.0);
 	log("\tframetime/overall:   %0.2lfms/%0.2lfms      100.0%%\n ",    	ms_frametime_avg, (double)ms_execution_time / frame_count);
 	log("\tfps/overall:         %0.2lf/%0.2lffps\n",	fps_avg, 	((double)frame_count / s_execution_time));
-	log("\tpopcount:            %zu\n",	global_pop_count);
-	log("\tgeneration:          %zu\n",	generation_count);
+//	log("\tgens per sec:        %0.2lf\n",	((double)generation_count / s_execution_time));
+//	log("\tgens per sec:        %0.2lf\n",	((double)generation_count / s_execution_time));
 	exit_SDL();
 }
+
 
 void init_cells() {
 	int window_width, window_height;
 	SDL_GetWindowSize(window, &window_width, &window_height);
-	log("win     size: %dx%d\n", window_width, window_height);
 
-	assert(cells_cols % scaling_factor == 0);
-	assert(cells_rows % scaling_factor == 0);
-	cells_cols = window_width / scaling_factor;
-	cells_rows = window_height / scaling_factor;
-
+	_assert(window_width % scaling_factor == 0);
+	_assert(window_height % scaling_factor == 0);
+	board_cols = window_width / scaling_factor;
+	board_rows = window_height / scaling_factor;
 	cell_width_px = scaling_factor;
 	cell_height_px = scaling_factor;
-	log("cells   size: %dx%d\n", cells_cols, cells_rows);
-	log("cell    size: %dx%d\n", cell_width_px, cell_height_px);
-	cells = ALLOC(cells_rows, sizeof(CELL_STATE*));
-	if (!cells) logfatalerrno("calloc1");
 
-	for (int y = 0; y < cells_rows; y++) {
-		cells[y] = ALLOC(cells_cols, sizeof(CELL_STATE));
-		if (!cells[y]) logfatalerrno("calloc1[%d]", y);
+	get_commit_hash(7);
+	log("\n");
+	log("        name| %s\n",   PROG_NAME);
+	log(" description| %s\n",   PROG_DESCRIPTION);
+	log("      commit| %s\n\n", COMMIT_HASH);
+
+	log("    win size| %dx%d\n", window_width, window_height);
+	log("  board size| %dx%d\n", board_cols, board_rows);
+	log("   cell size| %dx%d\n", cell_width_px, cell_height_px);
+
+
+	board = ALLOC(board_rows, sizeof(CELL_STATE*));
+	if (!board) logfatalerrno("calloc1");
+
+	for (int y = 0; y < board_rows; y++) {
+		board[y] = ALLOC(board_cols, sizeof(CELL_STATE));
+		if (!board[y]) logfatalerrno("calloc1[%d]", y);
 	}
 
 	// temp to check if rendering works
-	for (int y = 0; y < cells_rows; y++) {
-		for (int x = 0; x < cells_cols; x++) {
-			if ((x + (y * cells_cols)) % 2 == 0) {
+	for (int y = 0; y < board_rows; y++) {
+		for (int x = 0; x < board_cols; x++) {
+			if ((x + (y * board_cols)) % 2 == 0) {
 				set_cell(x, y, true);
 			}
 		}
@@ -232,25 +285,19 @@ size_t population_count(int init_x, int init_y) {
 	size_t pop_count = 0;
 	for (int xi = -1; xi <= 1; xi++) {
 		int x = init_x + xi;
-		if (x >= cells_cols || x < 0) continue;
+		if (x >= board_cols || x < 0) continue;
 		for (int iter_y = -1; iter_y <= 1; iter_y++) {
 			int y = init_y + iter_y;
-			if (y >= cells_rows || y < 0 ) continue;
+			if (y >= board_rows || y < 0 ) continue;
 			if (get_cell(x, y)) pop_count++;
 		}
 	}
 	return pop_count;
 }
 
-// popcount:
-// fps:
-// frametime:
-// drawtime:
-// update time:
-//
 static void update() {
-	for (int y = 0; y < cells_rows; y++) {
-		for (int x = 0; x < cells_cols; x++) {
+	for (int y = 0; y < board_rows; y++) {
+		for (int x = 0; x < board_cols; x++) {
 			size_t pop_count = population_count(x, y);
 			if (pop_count < 2) set_cell(x, y, DEAD); // underpopulation
 			if (pop_count >= 4) set_cell(x, y, DEAD); // overpopulation
@@ -272,9 +319,9 @@ void draw_cell(int x, int y) {
 
 static void draw_cells() {
 	SDL_Color(black);
-	for (int y = 0; y < cells_rows; y++) {
-		for (int x = 0; x < cells_cols; x++) {
-			if (cells[y][x] == true) {
+	for (int y = 0; y < board_rows; y++) {
+		for (int x = 0; x < board_cols; x++) {
+			if (board[y][x] == true) {
 				draw_cell(x, y);
 			}
 		}
@@ -294,6 +341,7 @@ static void init_fonts() {
 }
 
 static void init_SDL() {
+	SET_RENDER_FLAGS();
 	if (SDL_Init(SDL_INIT_EVERYTHING)) {
 		logsdl("Failed to initialize SDL");
 		logexit(EXIT_FAILURE);
