@@ -1,4 +1,8 @@
 .PHONY: $(PROG) all clean run debug tsan $(OBJS)
+# check for sdl2 install, should be the only dependency other than xcode i guess
+ifeq (, $(shell which sdl2-config 2>/dev/null))
+$(error "SDL2 not found! Please install it with 'brew install sdl2' or your package manager.")
+endif
 
 PROG	:= hello_metal
 
@@ -7,6 +11,7 @@ CXX	:= clang++
 STD	:= -std=c++17
 CFLAGS	:= -Iinclude -Ithirdparty/metal-cpp
 CFLAGS 	+= $(shell sdl2-config --cflags)
+
 
 # source
 SRC 	:= $(wildcard src/*.cpp) 

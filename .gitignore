@@ -3,7 +3,10 @@
 !.gitignore
 !*/
 !*.c
+!*.cpp
 !*.h
+!*.hpp
+!*.metal
 !Makefile
 !README.md
 
