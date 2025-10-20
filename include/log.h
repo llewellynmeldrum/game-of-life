@@ -31,18 +31,6 @@
 	extern bool show_pretty_print_guide;
 extern char copybuf[];
 
-char COMMIT_HASH[8];
-static inline char *get_commit_hash(size_t len) {
-	FILE* fp;
-	fp = popen("git rev-parse --short=7 HEAD", "r+");
-	if (!fp) {
-		perror("popen()");
-		return NULL;
-	}
-	fscanf(fp, "%7s", COMMIT_HASH);
-	pclose(fp);
-	return COMMIT_HASH;
-}
 
 ssize_t GET_TERM_COLS();
 void LOG_UPPER_SEPARATOR();
@@ -167,7 +155,7 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
 #define SET(s) "\033["s"m"
 
 #define logln(fmt, ...) \
-fprintf(stderr, SET_BOLD"[%s:%d] %s %s "fmt, __FILE__, __LINE__, SET_CLEAR, ##__VA_ARGS__)
+fprintf(stderr, SET_BOLD"[%s:%d] %s %s " fmt, __FILE__, __LINE__, SET_CLEAR, ##__VA_ARGS__)
 
 #define _assert(truth) if(!(truth)) {__ASSERTION_FAILED(truth);}
 #define __ASSERTION_FAILED(TRUTH) 	\
@@ -179,7 +167,7 @@ fprintf(stderr, SET_RED SET_NOBOLD\
 	logexit(EXIT_FAILURE)
 
 #define logfatal_ln_exit(fmt, ...) \
-fprintf(stderr, "%s%s%s[%s:%d] IN --> %s(): %s "fmt,		\
+fprintf(stderr, "%s%s%s[%s:%d] IN --> %s(): %s " fmt,		\
 		(SET_BOLD), (SET_RED), (SET_NOBOLD),		\
 		__FILE__, __LINE__, __func__, (SET_CLEAR)	\
 		, ##__VA_ARGS__);				\

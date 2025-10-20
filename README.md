@@ -19,3 +19,9 @@ Stats:
  	frametime/overall:   8.58ms/8.78ms      100.0%
  	fps/overall:         116.50/113.89fps
 ```
+
+# References:
+
+[https://metaltutorial.com/Setup/](https://metaltutorial.com/Setup/)
+[https://www.cutting.io/posts/game-of-life-on-metal/](https://www.cutting.io/posts/game-of-life-on-metal/)
+
