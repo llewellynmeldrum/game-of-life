@@ -9,6 +9,7 @@
 !*.metal
 !Makefile
 !README.md
+thirdparty/*
 
 *.o
 *.out
