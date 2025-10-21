@@ -93,9 +93,9 @@ void SDMTL::mtl_draw() {
 	mtl.command_buf = mtl.command_queue->commandBuffer();
 
 	/* create render pass */
-	auto pass = MTL::RenderPassDescriptor::alloc()->init();
+	auto render_pass = MTL::RenderPassDescriptor::alloc()->init();
 	/* add color attachments for the pass */
-	auto pass_color_attachment = pass->colorAttachments()->object(0);
+	auto pass_color_attachment = render_pass->colorAttachments()->object(0);
 	pass_color_attachment->setTexture(mtl.drawable->texture());
 	pass_color_attachment->setLoadAction(MTL::LoadActionClear);
 	pass_color_attachment->setClearColor(MTL::ClearColor(mtl.clear_col));
@@ -103,9 +103,9 @@ void SDMTL::mtl_draw() {
 
 
 	/* command encoding */
-	auto command_encoder = mtl.command_buf->renderCommandEncoder(pass);
+	auto command_encoder = mtl.command_buf->renderCommandEncoder(render_pass);
 	command_encoder->setRenderPipelineState(mtl.pipeline_state);
-	command_encoder->setVertexBuffer(mtl.triangle_vertex_buf, 0, 0);
+	command_encoder->setVertexBuffer(triangle.vertex_buf, 0, 0);
 	NS::UInteger vertex_offset = 0;
 	NS::UInteger vertex_count = 3;
 	command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, vertex_offset, vertex_count);
@@ -113,11 +113,10 @@ void SDMTL::mtl_draw() {
 
 	mtl.command_buf->presentDrawable(mtl.drawable);
 	mtl.command_buf->commit();
-	mtl.command_buf->waitUntilCompleted();
+//	mtl.command_buf->waitUntilCompleted();
 
-
-
-	pass->release();
+	render_pass->release();
+	mtl.drawable->release();
 
 
 }
@@ -147,7 +146,7 @@ void SDMTL::load_library(const char* msl_path) {
 		logexit(EXIT_FAILURE);
 	}
 }
-void SDMTL::init_triangle(Triangle t) {
+void SDMTL::init_triangle(Triangle &t) {
 	simd::float3 triangle_verticies[] = {
 		{-0.5f, -0.5f, 0.0f},
 		{ 0.5f, -0.5f, 0.0f},

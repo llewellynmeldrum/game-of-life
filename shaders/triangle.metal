@@ -5,11 +5,7 @@ using namespace metal;
 
 vertex
 float4 vertex_shader(uint vertex_id[[vertex_id]], constant simd::float3* vertex_pos) {
-	float4 vertex_out_pos = float4(
-	                            vertex_pos[vertex_id][0],
-	                            vertex_pos[vertex_id][1],
-	                            vertex_pos[vertex_id][2],
-	                            1.0f);
+	float4 vertex_out_pos = float4( vertex_pos[vertex_id][0], vertex_pos[vertex_id][1], vertex_pos[vertex_id][2], 1.0f);
 	return vertex_out_pos;
 }
 

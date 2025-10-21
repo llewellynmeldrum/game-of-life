@@ -62,7 +62,7 @@ class SDMTL {
 	void send_render_cmd();
 	void draw();
 
-	void init_triangle(Triangle t);
+	void init_triangle(Triangle& t);
 	void handle_input();
 	void handle_keypress(SDL_Keysym key);
 	void mtl_draw();

@@ -11,6 +11,8 @@ CXX	:= clang++
 STD	:= -std=c++17
 CFLAGS	:= -Iinclude -Ithirdparty/metal-cpp
 CFLAGS 	+= $(shell sdl2-config --cflags)
+MTL_HUD_ENABLED=1
+
 
 
 # source
