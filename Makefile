@@ -11,9 +11,14 @@ CXX	:= clang++
 STD	:= -std=c++17
 CFLAGS	:= -Iinclude -Ithirdparty/metal-cpp
 CFLAGS 	+= $(shell sdl2-config --cflags)
+
+
+
+# env variables
 MTL_HUD_ENABLED=1
+OBJC_DEBUG_MISSING_POOLS=YES
 
-
+MTL_HUD_INSIGHTS_ENABLED=1
 
 # source
 SRC 	:= $(wildcard src/*.cpp) 

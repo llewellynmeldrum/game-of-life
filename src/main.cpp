@@ -22,6 +22,7 @@ int main() {
 
 /* public */
 void SDMTL::init() {
+	auto init_release_pool = NS::AutoreleasePool::alloc()->init();
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
 	if (SDL_Init(SDL_INIT_EVERYTHING)) {
 		logsdl("Failed to initialize SDL");
@@ -71,8 +72,9 @@ void SDMTL::init() {
 		logfatal("Failed to create pipeline!\n");
 		logexit(EXIT_FAILURE);
 	}
-
 	pipeline_descriptor->release();
+
+	init_release_pool->release();
 
 }
 
@@ -87,8 +89,10 @@ void SDMTL::run() {
 }
 
 void SDMTL::mtl_draw() {
+	auto draw_release_pool = NS::AutoreleasePool::alloc()->init();
+
+
 	/* init command buffer from command queue */
-	auto auto_release_pool = NS::AutoreleasePool::alloc()->init();
 	mtl.drawable = mtl.layer->nextDrawable();
 	mtl.command_buf = mtl.command_queue->commandBuffer();
 
@@ -113,10 +117,10 @@ void SDMTL::mtl_draw() {
 
 	mtl.command_buf->presentDrawable(mtl.drawable);
 	mtl.command_buf->commit();
-//	mtl.command_buf->waitUntilCompleted();
+	mtl.command_buf->waitUntilCompleted();
 
-	auto_release_pool->release();
 
+	draw_release_pool->release();
 
 }
 
@@ -130,6 +134,7 @@ void SDMTL::cleanup() {
 /* private */
 
 void SDMTL::load_library(const char* msl_path) {
+	log("loaded lib\n");
 	char *msl_src = read_file(msl_path);
 	if (!msl_src) {
 		logsdl("Failed to read file '%s' \n", msl_path);
@@ -144,6 +149,8 @@ void SDMTL::load_library(const char* msl_path) {
 		logfn("\n%s:%s\n", err->domain()->utf8String(), err->localizedDescription()->utf8String());
 		logexit(EXIT_FAILURE);
 	}
+	free(msl_src);
+	compile_opts->release();
 }
 void SDMTL::init_triangle(Triangle &t) {
 	simd::float3 triangle_verticies[] = {
@@ -155,7 +162,6 @@ void SDMTL::init_triangle(Triangle &t) {
 	t.vertex_buf = mtl.device->newBuffer(&triangle_verticies,
 	                                     sizeof(triangle_verticies),
 	                                     MTL::ResourceStorageModeShared);
-
 }
 
 void SDMTL::handle_input() {

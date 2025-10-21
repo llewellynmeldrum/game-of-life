@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include "SDL_render.h"
 #include <Metal/Metal.hpp>
 #include <QuartzCore/CAMetalLayer.hpp>
 #include <QuartzCore/QuartzCore.hpp>
@@ -23,7 +24,7 @@ class SDMTL {
 		int width_px =  800;
 		int height_px = 600;
 		int win_flags = SDL_WINDOW_METAL & SDL_WINDOW_INPUT_FOCUS;
-		int renderer_flags = SDL_RENDERER_PRESENTVSYNC;
+		int renderer_flags = SDL_RENDERER_PRESENTVSYNC & SDL_RENDERER_ACCELERATED;
 	};
 
 	// metal state
@@ -35,7 +36,6 @@ class SDMTL {
 		MTL::CommandQueue *command_queue;
 		MTL::CommandBuffer *command_buf;
 		MTL::RenderPipelineState *pipeline_state;
-		MTL::Buffer *triangle_vertex_buf;
 
 		MTL::ClearColor clear_col =
 		{41.0f / 255.0f, 42.0f / 255.0f, 48.0f / 255.0f, 1.0};
