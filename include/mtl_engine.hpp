@@ -28,23 +28,6 @@ class MTLEngine {
 	void send_render_cmd();
 	void draw();
 
-	SDL_Renderer *sdl_renderer;
-	SDL_Window *sdl_window;
-
-	CA::MetalLayer *mtl_layer;
-	CA::MetalDrawable *mtl_drawable;
-
-	MTL::Device *mtl_device;
-	MTL::Library *mtl_default_lib;
-	MTL::CommandQueue *mtl_cmd_queue;
-	MTL::CommandBuffer *mtl_cmd_buf;
-	MTL::RenderPipelineState *metal_render_pso;
-	MTL::Buffer *triangle_vtx_buf;
-
-
-	bool sdl_running = true;
-	const size_t screen_width_px = 800;
-	const size_t screen_height_px = 600;
 	void init_mtl_sdl();
 	void sdl_handle_input();
 	void sdl_draw();

@@ -24,13 +24,25 @@ LDFLAGS	:= -framework Metal -framework Foundation -framework QuartzCore
 LDLIBS := $(shell sdl2-config --libs)
 
 
-# TERM_COLS:=$(shell tput cols) 
+# METAL STUFF
+
+METAL_SOURCES:= $(wildcard shaders/*.metal) 
+AIR_OBJECTS:= $(SHADERS:.metal=.air)
+METALLIB:= default.metallib
+
 
 all: $(PROG)
 
 
+%.air: %.metal
+	xcrun -sdk macosx metal -c $< -o $@
+
+$(METALLIB): $(AIR_OBJECTS)
+	xcrun -sdk macosx metallib $^ -o $@
+
+
 #compile .c into .o (compilation proper)
-%.o: %.cpp 
+%.o: %.cpp $(METALLIB)
 	@$(FMT_GREENBANNER)
 	@echo " COMPILE SRC -> OBJ  > " 
 	@$(FMT_RESET)
@@ -52,6 +64,7 @@ run: clean $(PROG)
 	@printf "\n"
 
 # DEBUG PROGRAM
+debug: CFLAGS+= -g
 debug: $(PROG)
 	lldb -o run -- $(PROG) $(TERM_COLS) $(A)
 
@@ -59,7 +72,7 @@ clean:
 	@$(FMT_REV)
 	@echo " REMOVING EXECUTABLES AND OBJECT FILES... "
 	@$(FMT_RESET)
-	rm -f $(PROG) $(OBJS)
+	rm -f $(PROG) $(OBJS) $(AIR_OBJECTS)
 
 
 
