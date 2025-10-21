@@ -83,12 +83,12 @@ void SDMTL::run() {
 	while(sdl.running) {
 		handle_input();
 		mtl_draw();
-		//	SDL_RenderPresent(sdl.renderer);
 	}
 }
 
 void SDMTL::mtl_draw() {
 	/* init command buffer from command queue */
+	auto auto_release_pool = NS::AutoreleasePool::alloc()->init();
 	mtl.drawable = mtl.layer->nextDrawable();
 	mtl.command_buf = mtl.command_queue->commandBuffer();
 
@@ -115,8 +115,7 @@ void SDMTL::mtl_draw() {
 	mtl.command_buf->commit();
 //	mtl.command_buf->waitUntilCompleted();
 
-	render_pass->release();
-	mtl.drawable->release();
+	auto_release_pool->release();
 
 
 }
