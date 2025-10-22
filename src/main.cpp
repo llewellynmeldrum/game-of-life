@@ -15,7 +15,7 @@
 
 int main() {
 	GOL sim = GOL();
-	sim.init("shaders/Shaders.metal");
+	sim.init("shaders/shader_test.metal");
 	sim.run();
 	sim.cleanup();
 	exit(EXIT_SUCCESS);
@@ -28,7 +28,7 @@ void GOL::init(const char* shader_src_path) {
 	auto init_pool = NS::AutoreleasePool::alloc()->init();
 	mtl_init(shader_src_path);
 	init_pool->release();
-
+	reset_sim();
 }
 
 MTL::Function *GOL::setup_vertex_fn(MTL::Library* lib, MTL::RenderPipelineDescriptor* pld, const char* vertex_fn_name_cstr) {
@@ -48,15 +48,13 @@ MTL::Function *GOL::setup_fragment_fn(MTL::Library* lib, MTL::RenderPipelineDesc
 }
 
 MTL::Buffer *GOL::setup_vertex_buffer() {
-	simd::float3 verticies[] = {
-		{-1.0, -1.0,  0.0},
-		{ 1.0,  1.0, -1.0},
-		{ 0.0,  1.0, -1.0},
-		{ 1.0,  0.0,  1.0},
-		{-1.0,  1.0,  0.0},
-		{ 1.0,  1.0, -1.0},
-		{ 0.0,  1.0,  1.0},
-		{ 1.0,  0.0,  1.0},
+	simd::float4 verticies[] = {
+		{-1.0, -1.0, 0.0, 1.0,	},
+		{   1.0, -1.0, 0.0, 1.0,},
+		{  -1.0,  1.0, 0.0, 1.0,},
+		{  -1.0,  1.0, 0.0, 1.0,},
+		{   1.0, -1.0, 0.0, 1.0,},
+		{   1.0,  1.0, 0.0, 1.0 },
 	};
 	return mtl.device->newBuffer(&verticies, sizeof(verticies), MTL::ResourceStorageModeShared);
 
@@ -82,8 +80,8 @@ void GOL::mtl_init(const char* shader_src_path) {
 
 	auto pixel_format = (MTL::PixelFormat)mtl.layer->pixelFormat();
 	pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(pixel_format);
-	mtl.pipeline_state = mtl.device->newRenderPipelineState(pipeline_descriptor, &err);
-	if (!mtl.pipeline_state) {
+	mtl.render_pipeline_state = mtl.device->newRenderPipelineState(pipeline_descriptor, &err);
+	if (!mtl.render_pipeline_state) {
 		logfatal("Failed to create pipeline state!\n");
 		logexit(EXIT_FAILURE);
 	}
@@ -100,9 +98,16 @@ void GOL::mtl_init(const char* shader_src_path) {
 
 }
 
+void GOL::reset_sim() {
+
+	int *bytes = (int*)malloc(sizeof(int) * 800);
+	get_current_gen_texture()->replaceRegion(MTL::Region::Make2D(0, 0, 800, 600), 0, bytes, 800 * 4);
+	// TODO:
+}
+
 MTL::Texture *GOL::create_texture() {
 	auto td = MTL::TextureDescriptor::alloc()->init();
-	td->setStorageMode(MTL::StorageModeManaged);
+	td->setStorageMode(MTL::StorageModeShared);
 	td->setUsage(MTL::TextureUsageShaderRead & MTL::TextureUsageShaderWrite);
 	td->setPixelFormat(mtl.layer->pixelFormat());
 	td->setWidth((NS::UInteger)sdl.width_px);
@@ -145,22 +150,22 @@ void GOL::run() {
 void GOL::mtl_draw() {
 	/* init command buffer from command queue */
 	mtl.drawable = mtl.layer->nextDrawable();
-	auto command_buf = mtl.command_queue->commandBuffer();
+	auto buffer = mtl.command_queue->commandBuffer();
 
 	/* create render pass */
 	auto render_pass = MTL::RenderPassDescriptor::alloc()->init();
 	auto pass_color_attachment = render_pass->colorAttachments()->object(0);
-	pass_color_attachment->setTexture(mtl.drawable->texture());
 	pass_color_attachment->setLoadAction(MTL::LoadActionClear);
-	pass_color_attachment->setClearColor(MTL::ClearColor(mtl.clear_col));
 	pass_color_attachment->setStoreAction(MTL::StoreActionStore);
+	pass_color_attachment->setClearColor(MTL::ClearColor(mtl.clear_col));
+	pass_color_attachment->setTexture(mtl.drawable->texture());
 
 
 	/* command encoding */
-	auto command_encoder = command_buf->renderCommandEncoder(render_pass);
+	auto command_encoder = buffer->renderCommandEncoder(render_pass);
 	render_pass->release();
 
-	command_encoder->setRenderPipelineState(mtl.pipeline_state);
+	command_encoder->setRenderPipelineState(mtl.render_pipeline_state);
 	command_encoder->setVertexBuffer(mtl.vertex_buf, 0, 0);
 	command_encoder->setFragmentTexture(get_current_gen_texture(), 0);
 	command_encoder->drawPrimitives(mtl.primitive_type, mtl.vertex_offset, mtl.vertex_count);
@@ -169,9 +174,9 @@ void GOL::mtl_draw() {
 	/* do compute encoder stuff */
 
 
-	command_buf->presentDrawable(mtl.drawable);
-	command_buf->commit();
-	command_buf->waitUntilCompleted();
+	buffer->presentDrawable(mtl.drawable);
+	buffer->commit();
+//	buffer->waitUntilCompleted();
 
 //	command_buf->release();
 	generation += 1;

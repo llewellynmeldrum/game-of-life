@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include "SDL_pixels.h"
 #include "SDL_render.h"
 #include <Metal/Metal.hpp>
 #include <QuartzCore/CAMetalLayer.hpp>
@@ -25,6 +26,8 @@ struct SDL_Context {
 	int height_px = 600;
 	int win_flags = SDL_WINDOW_METAL & SDL_WINDOW_INPUT_FOCUS;
 	int renderer_flags = SDL_RENDERER_PRESENTVSYNC & SDL_RENDERER_ACCELERATED;
+	int pixel_fmt = SDL_PIXELFORMAT_BGRA8888;
+	size_t bytes_per_pixel = 4;
 };
 
 // metal state
@@ -33,7 +36,8 @@ struct MTL_Context {
 	MTL::Device *device;
 	MTL::CommandQueue *command_queue;
 	CA::MetalDrawable *drawable;
-	MTL::RenderPipelineState *pipeline_state;
+	MTL::RenderPipelineState *render_pipeline_state;
+	MTL::ComputePipelineState *compute_pipeline_state;
 	MTL::Buffer *vertex_buf;
 
 	MTL::Texture *gen_a;
@@ -43,7 +47,11 @@ struct MTL_Context {
 	NS::UInteger vertex_count = 6;
 	MTL::PrimitiveType primitive_type = MTL::PrimitiveTypeTriangle;
 
-	MTL::ClearColor clear_col = {41.0f / 255.0f, 42.0f / 255.0f, 48.0f / 255.0f, 1.0};
+	MTL::ClearColor clear_col = {200.0f / 255.0f, 0.0f / 255.0f, 200.0f / 255.0f, 1.0};
+	simd:: float4 triangle_color = {0.0f / 255.0f, 0.0f / 255.0f, 0.0f / 255.0f, 1.0};
+
+	MTL::PixelFormat pixel_fmt = MTL::PixelFormatBGRA8Unorm;
+	NS::UInteger bytes_per_pixel = 4;
 };
 // *INDENT-OFF*
 class GOL {
@@ -53,9 +61,14 @@ class GOL {
 	void cleanup();
 
 	size_t generation = 0;
+	void reset_sim();
+	void restart_sim(float living_ratio);
 	MTL::Texture *create_texture();
 	inline MTL::Texture *get_current_gen_texture(){
 		return (generation%2==0 ? mtl.gen_a : mtl.gen_b);
+	}
+	inline MTL::Texture *get_next_gen_texture(){
+		return (generation%2==0 ? mtl.gen_b : mtl.gen_a);
 	}
 
 	SDL_Context sdl;
@@ -69,6 +82,7 @@ class GOL {
 
 	NS::Error *err;
 
+	MTL::ComputePipelineState *setup_compute_pipeline(MTL::Library* lib, MTL::RenderPipelineDescriptor* pld, const char* compute_fn_name_cstr);
 	MTL::Function *setup_fragment_fn(MTL::Library* lib, MTL::RenderPipelineDescriptor* pld, const char* fragment_fn_name_cstr);
 	MTL::Function *setup_vertex_fn(MTL::Library* lib, MTL::RenderPipelineDescriptor* pld, const char* vertex_fn_name_cstr);
 	MTL::Buffer *setup_vertex_buffer();
