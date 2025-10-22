@@ -89,6 +89,9 @@ void GOL::mtl_init(const char* shader_src_path) {
 	mtl.gen_a = GOL::create_texture();
 	mtl.gen_b = GOL::create_texture();
 
+	auto compute_fn_name = NS::String::string("compute_shader", NS::ASCIIStringEncoding);
+	auto compute_fn = lib->newFunction(compute_fn_name);
+	mtl.compute_pipeline_state = mtl.device->newComputePipelineState(compute_fn, &err);
 
 
 	pipeline_descriptor->release();
@@ -100,15 +103,21 @@ void GOL::mtl_init(const char* shader_src_path) {
 
 void GOL::reset_sim() {
 
-	int *bytes = (int*)malloc(sizeof(int) * 800);
+	generation = 0;
+	int *bytes = (int*)malloc(sizeof(int) * 800 * 600);
+	for (int i = 0; i < 800 * 600; i++) {
+		if ((float)rand() / RAND_MAX > 0.8)
+			bytes[i] = 0xFFFFFFFF;
+	}
 	get_current_gen_texture()->replaceRegion(MTL::Region::Make2D(0, 0, 800, 600), 0, bytes, 800 * 4);
+	get_next_gen_texture()->replaceRegion(MTL::Region::Make2D(0, 0, 800, 600), 0, bytes, 800 * 4);
 	// TODO:
 }
 
 MTL::Texture *GOL::create_texture() {
 	auto td = MTL::TextureDescriptor::alloc()->init();
 	td->setStorageMode(MTL::StorageModeShared);
-	td->setUsage(MTL::TextureUsageShaderRead & MTL::TextureUsageShaderWrite);
+	td->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite);
 	td->setPixelFormat(mtl.layer->pixelFormat());
 	td->setWidth((NS::UInteger)sdl.width_px);
 	td->setHeight((NS::UInteger)sdl.height_px);
@@ -171,8 +180,18 @@ void GOL::mtl_draw() {
 	command_encoder->drawPrimitives(mtl.primitive_type, mtl.vertex_offset, mtl.vertex_count);
 	command_encoder->endEncoding();
 
-	/* do compute encoder stuff */
+	auto compute_encoder = buffer->computeCommandEncoder();
+	compute_encoder->setComputePipelineState(mtl.compute_pipeline_state);
 
+	compute_encoder->setTexture(get_current_gen_texture(), 0);
+	compute_encoder->setTexture(get_next_gen_texture(), 1);
+
+	auto tw = mtl.compute_pipeline_state->threadExecutionWidth();
+	auto th = mtl.compute_pipeline_state->maxTotalThreadsPerThreadgroup() / tw;
+	auto tptg = MTL::Size::Make(tw, th, 1);
+	auto tpg = MTL::Size::Make(800, 600, 1);
+	compute_encoder->dispatchThreads(tpg, tptg);
+	compute_encoder->endEncoding();
 
 	buffer->presentDrawable(mtl.drawable);
 	buffer->commit();
