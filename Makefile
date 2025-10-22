@@ -86,14 +86,14 @@ clean:
 
 # ADSAN
 	
-tsan: CFLAGS  += -fsanitize=thread -fno-omit-frame-pointer 
-tsan: LDFLAGS += -fsanitize=thread
+tsan: CFLAGS  += -g -fsanitize=thread -fno-omit-frame-pointer 
+tsan: LDFLAGS += -g -fsanitize=thread
 tsan: LDLIBS  += -fsanitize=thread
 tsan: clean run 
 	
 # Address san: lower overhead than thread-san, cleaner stack traces,
-asan: CFLAGS  += -fsanitize=address -fno-omit-frame-pointer
-asan: LDFLAGS += -fsanitize=address
+asan: CFLAGS  += -g -fsanitize=address -fno-omit-frame-pointer
+asan: LDFLAGS += -g -fsanitize=address
 asan: LDLIBS  += -fsanitize=address
 asan: ASAN_ENV:= ASAN_OPTIONS=abort_on_error=1
 asan: clean run 
@@ -104,8 +104,8 @@ usan: LDLIBS  += -fsanitize=undefined
 usan: clean run 
 
 
-ausan: CFLAGS  += -fsanitize=address,undefined -fno-omit-frame-pointer
-ausan: LDFLAGS += -fsanitize=address,undefined
+ausan: CFLAGS  += -g -fsanitize=address,undefined -fno-omit-frame-pointer
+ausan: LDFLAGS += -g -fsanitize=address,undefined
 ausan: LDLIBS  += -fsanitize=address,undefined
 ausan: CFLAGS+= -fsanitize-address-use-after-scope
 ausan: ASAN_ENV:= ASAN_OPTIONS=abort_on_error=1
