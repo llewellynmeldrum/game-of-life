@@ -7,22 +7,115 @@
 #include "metal-cpp_sdl.hpp"
 
 #include <iostream>
+#include <functional>
 #include <cstdlib>
 
 #include "log.h"
 #include <sys/stat.h>
 
 int main() {
-	SDMTL engine = SDMTL();
-	engine.init();
-	engine.run();
-	engine.cleanup();
+	GOL sim = GOL();
+	sim.init("shaders/Shaders.metal");
+	sim.run();
+	sim.cleanup();
 	exit(EXIT_SUCCESS);
 }
 
-/* public */
-void SDMTL::init() {
-	auto init_release_pool = NS::AutoreleasePool::alloc()->init();
+
+void GOL::init(const char* shader_src_path) {
+	sdl_init();
+
+	auto init_pool = NS::AutoreleasePool::alloc()->init();
+	mtl_init(shader_src_path);
+	init_pool->release();
+
+}
+
+MTL::Function *GOL::setup_vertex_fn(MTL::Library* lib, MTL::RenderPipelineDescriptor* pld, const char* vertex_fn_name_cstr) {
+	auto vertex_fn_name = NS::String::string(vertex_fn_name_cstr, NS::ASCIIStringEncoding);
+	auto vertex_fn = lib->newFunction(vertex_fn_name);
+	pld->setVertexFunction(vertex_fn);
+	return vertex_fn;
+
+}
+
+MTL::Function *GOL::setup_fragment_fn(MTL::Library* lib, MTL::RenderPipelineDescriptor* pld, const char* fragment_fn_name_cstr) {
+	auto fragment_fn_name = NS::String::string(fragment_fn_name_cstr, NS::ASCIIStringEncoding);
+	auto fragment_fn = lib->newFunction(fragment_fn_name);
+	pld->setFragmentFunction(fragment_fn);
+	return fragment_fn;
+
+}
+
+MTL::Buffer *GOL::setup_vertex_buffer() {
+	simd::float3 verticies[] = {
+		{-1.0, -1.0,  0.0},
+		{ 1.0,  1.0, -1.0},
+		{ 0.0,  1.0, -1.0},
+		{ 1.0,  0.0,  1.0},
+		{-1.0,  1.0,  0.0},
+		{ 1.0,  1.0, -1.0},
+		{ 0.0,  1.0,  1.0},
+		{ 1.0,  0.0,  1.0},
+	};
+	return mtl.device->newBuffer(&verticies, sizeof(verticies), MTL::ResourceStorageModeShared);
+
+}
+void GOL::mtl_init(const char* shader_src_path) {
+
+	mtl.layer = (CA::MetalLayer*)SDL_RenderGetMetalLayer(sdl.renderer);
+	mtl.device = mtl.layer->device();					/* MUST BE RELEASED LATER */
+	mtl.command_queue = mtl.device->newCommandQueue();			/* MUST BE RELEASED */
+
+	mtl.vertex_buf = setup_vertex_buffer();
+	auto lib = load_mtl_lib_from_src(shader_src_path);
+
+	auto pipeline_descriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+	if (!pipeline_descriptor) {
+		logfatal("Failed to create pipeline!\n");
+		logexit(EXIT_FAILURE);
+	}
+
+	auto vert_fn = setup_vertex_fn(lib, pipeline_descriptor, "vertex_shader");
+	auto frag_fn = setup_fragment_fn(lib, pipeline_descriptor, "fragment_shader");
+
+
+	auto pixel_format = (MTL::PixelFormat)mtl.layer->pixelFormat();
+	pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(pixel_format);
+	mtl.pipeline_state = mtl.device->newRenderPipelineState(pipeline_descriptor, &err);
+	if (!mtl.pipeline_state) {
+		logfatal("Failed to create pipeline state!\n");
+		logexit(EXIT_FAILURE);
+	}
+
+	mtl.gen_a = GOL::create_texture();
+	mtl.gen_b = GOL::create_texture();
+
+
+
+	pipeline_descriptor->release();
+	vert_fn->release();
+	frag_fn->release();
+	lib->release();
+
+}
+
+MTL::Texture *GOL::create_texture() {
+	auto td = MTL::TextureDescriptor::alloc()->init();
+	td->setStorageMode(MTL::StorageModeManaged);
+	td->setUsage(MTL::TextureUsageShaderRead & MTL::TextureUsageShaderWrite);
+	td->setPixelFormat(mtl.layer->pixelFormat());
+	td->setWidth((NS::UInteger)sdl.width_px);
+	td->setHeight((NS::UInteger)sdl.height_px);
+	td->setDepth((NS::UInteger)1);
+
+	MTL::Texture* texture = mtl.device->newTexture(td);
+
+	td->release();
+	return texture;
+}
+
+void GOL::sdl_init() {
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
 	if (SDL_Init(SDL_INIT_EVERYTHING)) {
 		logsdl("Failed to initialize SDL");
@@ -37,68 +130,25 @@ void SDMTL::init() {
 	sdl.renderer = SDL_CreateRenderer(sdl.win, -1, render_flags);
 	if (!sdl.renderer) logsdl_exit("Failed to initialize renderer");
 
-
-
-	mtl.layer = (CA::MetalLayer*)SDL_RenderGetMetalLayer(sdl.renderer);
-	mtl.device = mtl.layer->device();
-	auto name = mtl.device->name();
-	// make sure we grabbed device
-	std::cerr << "device name: " << name->utf8String() << std::endl;
-
-	load_library("shaders/triangle.metal");
-	init_triangle(triangle);
-	mtl.command_queue = mtl.device->newCommandQueue();
-
-	auto pipeline_descriptor = MTL::RenderPipelineDescriptor::alloc()->init();
-	if (!pipeline_descriptor) {
-		logfatal("Failed to create pipeline!\n");
-		logexit(EXIT_FAILURE);
-	}
-
-	auto vertex_fn_name = NS::String::string("vertex_shader", NS::ASCIIStringEncoding);
-	auto vertex_fn = mtl.lib->newFunction(vertex_fn_name);
-	pipeline_descriptor->setVertexFunction(vertex_fn);
-
-	auto frag_fn_name = NS::String::string("fragment_shader", NS::ASCIIStringEncoding);
-	auto frag_fn = mtl.lib->newFunction(frag_fn_name);
-	pipeline_descriptor->setFragmentFunction(frag_fn);
-	assert(pipeline_descriptor);
-
-
-	auto pixel_format = (MTL::PixelFormat)mtl.layer->pixelFormat();
-	pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(pixel_format);
-	mtl.pipeline_state = mtl.device->newRenderPipelineState(pipeline_descriptor, &err);
-	if (!mtl.pipeline_state) {
-		logfatal("Failed to create pipeline!\n");
-		logexit(EXIT_FAILURE);
-	}
-	pipeline_descriptor->release();
-
-	init_release_pool->release();
-
 }
 
 
-
-
-void SDMTL::run() {
+void GOL::run() {
 	while(sdl.running) {
 		handle_input();
+		auto draw_pool = NS::AutoreleasePool::alloc()->init();
 		mtl_draw();
+		draw_pool->release();
 	}
 }
 
-void SDMTL::mtl_draw() {
-	auto draw_release_pool = NS::AutoreleasePool::alloc()->init();
-
-
+void GOL::mtl_draw() {
 	/* init command buffer from command queue */
 	mtl.drawable = mtl.layer->nextDrawable();
-	mtl.command_buf = mtl.command_queue->commandBuffer();
+	auto command_buf = mtl.command_queue->commandBuffer();
 
 	/* create render pass */
 	auto render_pass = MTL::RenderPassDescriptor::alloc()->init();
-	/* add color attachments for the pass */
 	auto pass_color_attachment = render_pass->colorAttachments()->object(0);
 	pass_color_attachment->setTexture(mtl.drawable->texture());
 	pass_color_attachment->setLoadAction(MTL::LoadActionClear);
@@ -107,64 +157,62 @@ void SDMTL::mtl_draw() {
 
 
 	/* command encoding */
-	auto command_encoder = mtl.command_buf->renderCommandEncoder(render_pass);
+	auto command_encoder = command_buf->renderCommandEncoder(render_pass);
+	render_pass->release();
+
 	command_encoder->setRenderPipelineState(mtl.pipeline_state);
-	command_encoder->setVertexBuffer(triangle.vertex_buf, 0, 0);
-	NS::UInteger vertex_offset = 0;
-	NS::UInteger vertex_count = 3;
-	command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, vertex_offset, vertex_count);
+	command_encoder->setVertexBuffer(mtl.vertex_buf, 0, 0);
+	command_encoder->setFragmentTexture(get_current_gen_texture(), 0);
+	command_encoder->drawPrimitives(mtl.primitive_type, mtl.vertex_offset, mtl.vertex_count);
 	command_encoder->endEncoding();
 
-	mtl.command_buf->presentDrawable(mtl.drawable);
-	mtl.command_buf->commit();
-	mtl.command_buf->waitUntilCompleted();
+	/* do compute encoder stuff */
 
 
-	draw_release_pool->release();
+	command_buf->presentDrawable(mtl.drawable);
+	command_buf->commit();
+	command_buf->waitUntilCompleted();
 
+//	command_buf->release();
+	generation += 1;
 }
 
-void SDMTL::cleanup() {
-	SDL_DestroyRenderer(sdl.renderer);
-	SDL_DestroyWindow(sdl.win);
-	SDL_Quit();
-	mtl.device->release();
-}
 
 /* private */
 
-void SDMTL::load_library(const char* msl_path) {
-	log("loaded lib\n");
+MTL::Library *GOL::load_mtl_lib_from_src(const char* msl_path) {
 	char *msl_src = read_file(msl_path);
 	if (!msl_src) {
 		logsdl("Failed to read file '%s' \n", msl_path);
 		logexit(EXIT_FAILURE);
 	}
-	auto msl_NS_FORMAT = NS::String::string(msl_src, NS::ASCIIStringEncoding);
+	//log("read file successfully:\n\n%s\n\n", msl_src);
+	auto msl_src_ascii = NS::String::string(msl_src, NS::ASCIIStringEncoding);
 
+	//logwarning("converted file \n");
 	auto compile_opts = MTL::CompileOptions::alloc()->init();
-	mtl.lib = mtl.device->newLibrary(msl_NS_FORMAT, compile_opts, &err);
-	if (!mtl.lib) {
+	MTL::Library* lib = mtl.device->newLibrary(msl_src_ascii, compile_opts, &err);
+	if (!lib) {
 		logfatal("Failed to initialize library '%s'.", msl_path);
 		logfn("\n%s:%s\n", err->domain()->utf8String(), err->localizedDescription()->utf8String());
 		logexit(EXIT_FAILURE);
 	}
 	free(msl_src);
 	compile_opts->release();
-}
-void SDMTL::init_triangle(Triangle &t) {
-	simd::float3 triangle_verticies[] = {
-		{-0.5f, -0.5f, 0.0f},
-		{ 0.5f, -0.5f, 0.0f},
-		{ 0.0f,  0.5f, 0.0f}
-	};
-
-	t.vertex_buf = mtl.device->newBuffer(&triangle_verticies,
-	                                     sizeof(triangle_verticies),
-	                                     MTL::ResourceStorageModeShared);
+	return lib;
 }
 
-void SDMTL::handle_input() {
+void GOL::cleanup() {
+	SDL_DestroyRenderer(sdl.renderer);
+	SDL_DestroyWindow(sdl.win);
+	SDL_Quit();
+	mtl.device->release();
+}
+
+void GOL::init_textures() {
+}
+
+void GOL::handle_input() {
 	SDL_Event event;
 	while( SDL_PollEvent( &event ) ) {
 		switch( event.type ) {
@@ -183,7 +231,7 @@ void SDMTL::handle_input() {
 	}
 }
 
-void SDMTL::handle_keypress(SDL_Keysym keysym) {
+void GOL::handle_keypress(SDL_Keysym keysym) {
 	switch (keysym.sym) {
 	case SDLK_ESCAPE:
 		sdl.running = false;
@@ -211,19 +259,19 @@ char *read_file(const char* filename) {
 		logfatalerrno("Unable to open file '%s'.\n", filename);
 		return NULL;
 	}
-
 	if (file_size == 0) {
-		logfatal("syscall_file_size(%s) ret=0.\n", filename);
 		fclose(file_ptr);
+		logfatal("file '%s' is empty!\n", filename);
 		return NULL;
 	}
+
 
 	if (file_size > MAX_FILE_SZ) {
 		logfatal("Requested file '%s' is too large! (%zu>%zu)\n", filename, file_size, MAX_FILE_SZ);
 		fclose(file_ptr);
 		return NULL;
 	}
-	char *file_contents = (char*)malloc(sizeof(char) * file_size);
+	char *file_contents = (char*)calloc(file_size + 1, sizeof(char));
 	if (!file_contents) {
 		logfatal("Unable to alloc buffer for file '%s'.\n", filename);
 		fclose(file_ptr);
