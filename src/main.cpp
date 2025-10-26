@@ -10,24 +10,25 @@
 #define bitsof(T)	(sizeof(T)*8)
 using std::vector;
 using std::string;
-using work_t = double;
+using work_t = float;
 constexpr auto epsilon = std::numeric_limits<work_t>::epsilon();
 constexpr size_t work_count = 1'000'000;
 constexpr work_t rand_min = -1'000'000;
 constexpr work_t rand_max = 1'000'000;
 
-// [0][1][2][3][4][5][6][7][8]
-//  1  0  0  0  0  0  0  0  0
 template<typename T>
 string comma_separate(T d) {
 	string s = std::to_string((size_t)d);
-	string s1 = s;
-	for (int i = 1; i < s.size() ; i++) {
-		if (i % 3 == 0) {
-			s1.insert(i, 1, (char)i);
+	int digits_seen = 0;
+	for (int i = s.size() - 1; i > 0 ; i--) {
+		if (isdigit(s[i]))
+			digits_seen++;
+		if (digits_seen == 3) {
+			s.insert(i, 1, ',');
+			digits_seen = 0;
 		}
 	}
-	return s1;
+	return s;
 }
 
 void work(size_t i, vector<work_t> &A, vector<work_t> &B, vector<work_t> &res) {
@@ -84,12 +85,24 @@ double calc_tflops(size_t ns_elapsed, size_t ops_completed) {
 // tflops = flops/1'000'000'000'000
 //
 
-int main() {
+double calc_theoretical_tflops() {
+	return 5.3;
+}
+
+double ns_to_do_work(size_t work_count, ) {
 	CLOCK clock;
 
 	auto A = new vector<work_t>(work_count, 0 );
 	auto B = new vector<work_t>(work_count, 0 );
 	auto res = new vector<work_t>(work_count, 0 );
+
+	randomize_vec(*A);
+	randomize_vec(*B);
+	randomize_vec(*res);
+	//warmup
+	for (size_t i = 0; i < work_count; i++) {
+		work(i, *A, *B, *res);
+	}
 
 	randomize_vec(*A);
 	randomize_vec(*B);
@@ -113,9 +126,15 @@ int main() {
 	printf("took   %gs\n", s);
 
 	printf("ns per op: %gns/op\n", calc_ns_per_op(ns, work_count));
-	printf("FLOPS: %0.2lf\n", calc_flops(ns, work_count));
-	printf("GFLOPS: %0.2lf\n", calc_gflops(ns, work_count));
-	printf("TFLOPS: %0.2lf\n", calc_tflops(ns, work_count));
+	printf("FLOPS: %s\n", comma_separate(calc_flops(ns, work_count)).c_str());
+	printf("GFLOPS: %g\n", calc_gflops(ns, work_count));
+	printf("TFLOPS: %g\n", calc_tflops(ns, work_count));
+
+	printf("Theoretical TFLOP: %g\n", calc_theoretical_tflops());
+	printf("Measured TFLOPS %% of theoretical TFLOPS: %lf%%\n", calc_tflops(ns, work_count) / calc_theoretical_tflops() * 100.0);
+
+}
+int main() {
 }
 
 
