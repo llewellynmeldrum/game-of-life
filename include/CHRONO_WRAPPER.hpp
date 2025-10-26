@@ -23,16 +23,16 @@ struct CLOCK {
 	}
 
 
-	inline double get_s_elapsed() noexcept {
-		return (get_ns_elapsed() / 1'000'000'000.0);
+	inline double get_s_between() noexcept {
+		return (get_ns_between() / 1'000'000'000.0);
 	}
-	inline double get_ms_elapsed() noexcept {
-		return (get_ns_elapsed() / 1'000'000.0);
+	inline double get_ms_between() noexcept {
+		return (get_ns_between() / 1'000'000.0);
 	}
-	inline double get_us_elapsed() noexcept {
-		return (get_ns_elapsed() / 1'000.0);
+	inline double get_us_between() noexcept {
+		return (get_ns_between() / 1'000.0);
 	}
-	inline size_t get_ns_elapsed() noexcept {
+	inline size_t get_ns_between() noexcept {
 		auto elapsed_duration = get_duration(t0, t1);
 		return std::chrono::duration_cast<nsec>(elapsed_duration).count();
 	}

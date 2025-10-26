@@ -12,7 +12,6 @@ using std::vector;
 using std::string;
 using work_t = float;
 constexpr auto epsilon = std::numeric_limits<work_t>::epsilon();
-constexpr size_t work_count = 1'000'000;
 constexpr work_t rand_min = -1'000'000;
 constexpr work_t rand_max = 1'000'000;
 
@@ -41,12 +40,11 @@ bool fequal(work_t a, work_t b) {
 
 bool check_work(vector<work_t> &A, vector<work_t> &B, vector<work_t> &res) {
 	size_t incorrect = 0;
-	for (size_t i = 0; i < work_count; i++) {
+	for (size_t i = 0; i < A.size(); i++) {
 		if (!fequal(A[i]*B[i], res[i])) {
 			++incorrect;
 		}
 	}
-	printf("%lu/%lu successful\n", work_count - incorrect, work_count);
 	return (incorrect == 0);
 
 }
@@ -89,7 +87,7 @@ double calc_theoretical_tflops() {
 	return 5.3;
 }
 
-double ns_to_do_work(size_t work_count, ) {
+double ns_to_do_work(size_t work_count) {
 	CLOCK clock;
 
 	auto A = new vector<work_t>(work_count, 0 );
@@ -107,6 +105,7 @@ double ns_to_do_work(size_t work_count, ) {
 	randomize_vec(*A);
 	randomize_vec(*B);
 	randomize_vec(*res);
+
 	clock.start();
 	for (size_t i = 0; i < work_count; i++) {
 		work(i, *A, *B, *res);
@@ -114,27 +113,80 @@ double ns_to_do_work(size_t work_count, ) {
 	clock.stop();
 	check_work(*A, *B, *res);
 
-	double s = clock.get_s_elapsed();
-	double ms = clock.get_ms_elapsed();
-	double us = clock.get_us_elapsed();
-	size_t ns = clock.get_ns_elapsed();
-	printf("did %s FP%lu units\n", comma_separate(work_count).c_str(), bitsof(work_t));
-	printf("did %lu FP%lu units\n", work_count, bitsof(work_t));
-	printf("took   %gus\n", us);
-	printf("took   %luns\n", ns);
-	printf("took   %gms\n", ms);
-	printf("took   %gs\n", s);
+	size_t ns = clock.get_ns_between();
 
-	printf("ns per op: %gns/op\n", calc_ns_per_op(ns, work_count));
-	printf("FLOPS: %s\n", comma_separate(calc_flops(ns, work_count)).c_str());
-	printf("GFLOPS: %g\n", calc_gflops(ns, work_count));
-	printf("TFLOPS: %g\n", calc_tflops(ns, work_count));
+	delete A;
+	delete B;
+	delete res;
 
-	printf("Theoretical TFLOP: %g\n", calc_theoretical_tflops());
-	printf("Measured TFLOPS %% of theoretical TFLOPS: %lf%%\n", calc_tflops(ns, work_count) / calc_theoretical_tflops() * 100.0);
-
+	return ns;
 }
+double percent_of_theoretical_flops(size_t ns, size_t work_count) {
+	return calc_tflops(ns, work_count) / calc_theoretical_tflops() * 100.0;
+}
+using std::to_string;
+
+template <typename T>
+static inline const char *to_cstr(T val) {
+	string* s = new string(std::to_string(val));
+	return s->c_str();
+}
+struct Worker {
+
+	size_t N;
+	size_t ns;
+	size_t ns_outer;
+	int col_width = 15;
+	vector<vector<string>> results;
+
+	void do_work(size_t N) {
+		this->N = N;
+		CLOCK outer_clock;
+		outer_clock.start();
+		ns = ns_to_do_work(N);
+		outer_clock.stop();
+		ns_outer = outer_clock.get_ns_between();
+
+		size_t flops = calc_flops(ns, N);
+		results.push_back({
+			comma_separate(N),
+			comma_separate(ns / 1'000'000) + "ms",
+			comma_separate(ns_outer / 1'000'000) + "ms",
+			comma_separate(flops),
+			to_string(percent_of_theoretical_flops(ns, N)) + "%"
+		});
+	}
+	void print_results() {
+		for (auto res : results) {
+			for (auto col: res) {
+				printf("%-*.*s ", col_width, col_width, col.c_str());
+			}
+			printf("\n");
+		}
+	}
+};
 int main() {
+
+	CLOCK prog_clock;
+	prog_clock.start();
+	vector<Worker> workers;
+	for (size_t N = 100; N < 10000'000'000; N *= 2) {
+		Worker w;
+		w.do_work(N);
+		workers.push_back(w);
+	}
+
+	Worker w = workers[0];
+	printf("%-*.*s ", w.col_width, w.col_width, "N");
+	printf("%-*.*s ", w.col_width, w.col_width, "MS CALC");
+	printf("%-*.*s ", w.col_width, w.col_width, "MS OVERALL");
+	printf("%-*.*s ", w.col_width, w.col_width, "FLOPS");
+	printf("%-*.*s ", w.col_width, w.col_width, "% POSSIBLE FLOPS");
+	printf("\n");
+	for (auto w : workers)
+		w.print_results();
+	printf("----------\ntook %0.2lfs\n", prog_clock.s_since_start());
+
 }
 
 
