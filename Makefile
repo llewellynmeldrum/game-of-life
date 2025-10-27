@@ -4,7 +4,7 @@ all: $(EXE)
 # ===== MAKE VARIABLES ===== 
 EXE_NAME :=compute_mult
 CXX	:=clang++
-STD	:= -std=c++17
+STD	:= -std=c++17 -O3 -Ofast
 CCFLAGS	:=-Iinclude -Ithirdparty/metal-cpp $(shell sdl2-config --cflags) $(STD)
 LDFLAGS	:=-framework Metal -framework Foundation -framework QuartzCore $(STD)
 LDLIBS	:=$(shell sdl2-config --libs)

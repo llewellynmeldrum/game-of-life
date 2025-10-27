@@ -8,127 +8,73 @@
 #include <vector>
 #include <cmath>
 
+#include "log.h"
 #include "SDMTL.hpp"
 #include "CHRONO_WRAPPER.hpp"
+#include <thread>
+#include <pthread.h>
+#include "strmanip.hpp"
+#include <pthread/qos.h>
+#include <typeindex>
+#include <any>
 #define bitsof(T)	(sizeof(T)*8)
-using std::vector;
-using std::string;
-using std::to_string;
-using work_t = float;
-constexpr auto epsilon = std::numeric_limits<work_t>::epsilon();
-constexpr work_t rand_min = -1'000'000;
-constexpr work_t rand_max = 1'000'000;
-using std::cout;
-using std::endl;
+constexpr size_t MIN_N = 1'000;
+constexpr size_t MAX_N = 100'000'000;
+const size_t MIN_THREADS = 1;
+const size_t MAX_THREADS = 256;
+struct Settings {
 
-template<typename T>
-string comma_separate(T d) {
-	string s;
-	if constexpr(std::is_same<T, string>::value) {
-		s = d;
-	} else {
-		s = to_string(static_cast<size_t>(d));
+	size_t thread_count;
+	Settings(): thread_count(MIN_THREADS) {};
+
+	Settings(size_t tc) : thread_count(tc) {
+	};
+	template<typename T>
+	void print_as(string name, T val) {
+		printf("%-*.*s:", Settings::col_w, Settings::col_w, name.c_str());
+		cout << val << endl;
 	}
-	int digits_seen = 0;
-	for (int i = s.size() - 1; i > 0 ; i--) {
-		if (isdigit(s[i]))
-			digits_seen++;
-		if (digits_seen == 3) {
-			s.insert(i, 1, ',');
-			digits_seen = 0;
-		}
+	void print() {
+//		printf("SETTINGS:\n");
+//		print_as("WORKER THREAD COUNT:", thread_count);
+		cout << thread_count << endl;
 	}
-	return s;
-}
 
-void work(size_t i, vector<work_t> &A, vector<work_t> &B, vector<work_t> &res) {
-	res[i] = A[i] * B[i];
-}
+	static const int col_w = 20;
+};
+Settings settings;
 
+constexpr auto EPSILON = std::numeric_limits<work_t>::epsilon();
 
-// *INDENT-OFF*
-char get_unit_prefix(int minify_lvl) {
-	switch(minify_lvl) {
-	case 1: return 'K'; break;
-	case 2: return 'M'; break;
-	case 3: return 'G'; break;
-	case 5: return 'T'; break;
-	case 6: return 'P'; break;
-	}
-	return ' ';
-}
-char get_num_prefix(int minify_lvl) {
-	switch(minify_lvl) {
-	case 1: return 'k'; break; // as in thousand
-	case 2: return 'm'; break; // as in million 
-	case 3: return 'b'; break; // as in billion
-	case 4: return 't'; break; // as in trillion
-	case 5: return 'q'; break; // as in quintillion
-	}
-	return ' ';
-}
+constexpr size_t MAX_STACK_ALLOWANCE = 2'000'000; /* unused */
+constexpr work_t WORK_RAND_MIN = -1'000'000;
+constexpr work_t WORK_RAND_MAX = 1'000'000;
+constexpr bool CHECK_WORK = true;
 
-
-string float_to_str(float f, size_t precision){
-        std::ostringstream ss;
-        ss << std::fixed << std::setprecision(precision) << f;
-	string s = ss.str();
-	return s;
-}
-
-string float_to_str_truncate_zeroes(float f, size_t precision){
-	string s = float_to_str(f,precision);
-//	cout << "ftostr" << s << endl;
-	if (s.size()<=3) return s;
-	char last_ch = s.at(s.size()-1);
-	while (s.size()>3){
-		last_ch = s.at(s.size()-1);
-		if (last_ch=='0')
-			s.erase(s.size()-1);
-		else 
-			break;
-	}
-	if (s.at(s.size()-1)=='.'){
-		s.erase(s.size()-1);
-	}
-	return s;
-}
-
-class MCPU_INFO{
-// TODO: 
-// - before anything, reorganize this file, it is a mess
-// - create methods to fill fields like cpu freq, cores, etc
-// - use systemctl 
-
+struct thread_cfg {
+	pthread_t thread;
+	size_t start;
+	size_t end;
+	vector<work_t> *A;
+	vector<work_t> *B;
+	vector<work_t> *res;
 };
 
-string minify_unit(double num, size_t target_minify_lvl, size_t precision) {
-	// target len includes suffix (K,M,B,T,Q)
-	size_t minify_lvl = 0;
-	while (minify_lvl<target_minify_lvl){
-		num = (double) num/1000.0;
-		minify_lvl++;
-	}
-	string s = float_to_str(num, precision);
-	char prefix = get_unit_prefix(minify_lvl);
-	if (prefix==' ') return s;
-	return s + prefix;
-}
 
-string minify_number(double num, size_t target_len) {
-	size_t minify_lvl = 0;
-	while (float_to_str_truncate_zeroes(num,2).size()>target_len){
-		num = (double) num/1000.0;
-		minify_lvl++;
-	}
-	string s = float_to_str_truncate_zeroes(num, 2);
-	char prefix = get_num_prefix(minify_lvl);
-	if (prefix==' ') return s;
-	return s + prefix;
-}
+
+
+class MCPU_INFO {
+// TODO:
+// - before anything, reorganize this file, it is a mess
+// - create methods to fill fields like cpu freq, cores, etc
+// - use systemctl
+  public:
+	void query_sysctl();
+};
+
 
 bool float_equals(work_t a, work_t b) {
-	return abs(a - b) < epsilon;
+	return abs(a - b) < EPSILON;
 }
 
 bool check_work(vector<work_t> &A, vector<work_t> &B, vector<work_t> &res) {
@@ -142,13 +88,13 @@ bool check_work(vector<work_t> &A, vector<work_t> &B, vector<work_t> &res) {
 
 }
 
-void randomize_vec(vector<work_t> &v) {
+void randomize_vec(vector<work_t> *v) {
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 	std::default_random_engine generator(seed);
 
 	// 2. Define a distribution for floating-point numbers
 	// This creates a uniform distribution between 0.0 and 1.0 (inclusive).
-	std::uniform_real_distribution<work_t> distribution(rand_min, rand_max);
+	std::uniform_real_distribution<work_t> distribution(WORK_RAND_MIN, WORK_RAND_MAX);
 
 	// 3. Create a vector to store the random floats
 	int vector_size = 10;
@@ -156,111 +102,128 @@ void randomize_vec(vector<work_t> &v) {
 
 	// 4. Fill the vector with random floats
 	for (int i = 0; i < vector_size; ++i) {
-		v[i] = distribution(generator);
+		v->at(i) = distribution(generator);
 	}
 }
 
-double calc_ns_per_op(size_t ns_elapsed, size_t ops_completed) {
+static inline double calc_ns_per_op(size_t ns_elapsed, size_t ops_completed) {
 	return ns_elapsed / (work_t)ops_completed;
 }
-double calc_flops(size_t ns_elapsed, size_t ops_completed) {
+static inline double calc_flops(size_t ns_elapsed, size_t ops_completed) {
 	return (work_t)ops_completed / (ns_elapsed / 1'000'000'000.0);
 }
-double calc_gflops(size_t ns_elapsed, size_t ops_completed) {
+static inline double calc_mflops(size_t ns_elapsed, size_t ops_completed) {
+	return ((work_t)ops_completed / (ns_elapsed / 1'000'000'000.0)) / 1'000'000;
+}
+static inline double calc_gflops(size_t ns_elapsed, size_t ops_completed) {
 	return ((work_t)ops_completed / (ns_elapsed / 1'000'000'000.0)) / 1'000'000'000;
 }
-double calc_tflops(size_t ns_elapsed, size_t ops_completed) {
+static inline double calc_tflops(size_t ns_elapsed, size_t ops_completed) {
 	return calc_gflops(ns_elapsed, ops_completed) / 1'000;
 }
-// flosp = ops/(ns/1'000'000'000)
-// tflops = flops/1'000'000'000'000
-//
 
-double calc_theoretical_tflops() {
+static inline double calc_theoretical_tflops() {
 	// lookup table based on device id or something is the only other way i can think to do this
 	// i use an m1 pro so this is a starting point
 	// also this is FP32
 	return 5.3;
 }
 
-constexpr size_t MAX_STACK_ALLOWANCE = 2'000'000;
-double ns_to_do_work_heap(size_t work_count) {
+static inline work_t work(work_t a, work_t b) {
+	return a * b;
+}
+
+void *work_n_times(void* v_args) {
+	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+	thread_cfg* args = (thread_cfg*)v_args;
+	for (int i = args->start; i < args->end; i++) {
+		args->res->at(i) = work(args->A->at(i), args->B->at(i));
+	}
+	return NULL;
+}
+
+
+size_t ns_to_do_work(size_t work_count) {
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
 	CLOCK clock;
 
-	auto A = new vector<work_t>(work_count, 0 );
-	auto B = new vector<work_t>(work_count, 0 );
-	auto res = new vector<work_t>(work_count, 0 );
+	// threads should be setup to handle an equal split of the work
+	// with N work_count, each thread should do N/work_count work
+	size_t thread_count = settings.thread_count;
+	size_t per_thread_work_count = work_count / thread_count;
 
-	randomize_vec(*A);
-	randomize_vec(*B);
-	//warmup
-	for (size_t i = 0; i < work_count; i++) {
-		work(i, *A, *B, *res);
+	// all of the threads share a few heap allocated objects,
+	// the only thing they dont share are the start and end pointers
+	thread_cfg base_cfg = thread_cfg();
+	base_cfg.A = new vector<work_t>(work_count, 0 );
+	base_cfg.B = new vector<work_t>(work_count, 0 );
+	base_cfg.res = new vector<work_t>(work_count, 0 );
+	randomize_vec(base_cfg.A);
+	randomize_vec(base_cfg.B);
+	vector<thread_cfg *> cfg_list = vector<thread_cfg *>(thread_count);
+
+
+	// warmup
+	clock.start();
+	for (size_t t = 0; t < thread_count; t++) {
+		// copy assign with base config (contains the heap allocated pointers threads share)
+		cfg_list[t] = new thread_cfg(base_cfg);
+		cfg_list[t]->start = t * (per_thread_work_count);
+		cfg_list[t]->end = (t + 1) * (per_thread_work_count);
+		if (t + 1 == thread_count) {
+			cfg_list[t]->end = work_count - 1;
+		}
+
+		pthread_create(&cfg_list[t]->thread, &attr, work_n_times, (void*)cfg_list[t]);
 	}
 
-	randomize_vec(*A);
-	randomize_vec(*B);
-
-	clock.start();
-	for (size_t i = 0; i < work_count; i++) {
-		work(i, *A, *B, *res);
+	for (size_t i = 0; i < thread_count; i++) {
+		int err = pthread_join(cfg_list[i]->thread, NULL);
+		if(err) {
+			string s = "";
+			switch (err) {
+			case EINVAL:
+				s = " The implementation has detected that the value specified by thread does not refer to a joinable thread.";
+				_logfatal("%s\n", s.c_str());
+				break;
+			case ESRCH:
+				s = "No thread could be found corresponding to that specified case by the given thread ID, thread.";
+				_logfatal("%s\n", s.c_str());
+				break;
+			case EDEADLK:
+				s = "A deadlock was detected or the value of thread specifies the calling thread.";
+				_logfatal("%s\n", s.c_str());
+				_logfatal("main thread_id: %p\n", pthread_self());
+				break;
+			}
+			_logfatalerrno_exit("Failed to join t%lu, err=%d\n", i, err);
+		}
 	}
 	clock.stop();
-//	check_work(*A, *B, *res);
+	if (CHECK_WORK)
+		check_work(*base_cfg.A, *base_cfg.B, *base_cfg.res);
 
-	size_t ns = clock.get_ns_between();
-
-	delete A;
-	delete B;
-	delete res;
-
-	return ns;
-}
-double ns_to_do_work_stack(size_t work_count) {
-	CLOCK clock;
-
-	auto A = vector<work_t>(work_count, 0 );
-	auto B = vector<work_t>(work_count, 0 );
-	auto res = vector<work_t>(work_count, 0 );
-
-	randomize_vec(A);
-	randomize_vec(B);
-	//warmup
-	for (size_t i = 0; i < work_count; i++) {
-		work(i, A, B, res);
+	for (size_t t = 0; t < thread_count; t++) {
+		delete cfg_list[t];
 	}
 
-	randomize_vec(A);
-	randomize_vec(B);
-
-	clock.start();
-	for (size_t i = 0; i < work_count; i++) {
-		work(i, A, B, res);
-	}
-	clock.stop();
-//	check_work(*A, *B, *res);
-
-	size_t ns = clock.get_ns_between();
 
 
-	return ns;
-}
-double ns_to_do_work(size_t work_count) {
-	if (work_count*sizeof(work_t) > MAX_STACK_ALLOWANCE){
-		return 	ns_to_do_work_heap(work_count);
-	}
-	return ns_to_do_work_stack(work_count);
+
+// do actual work
+
+	delete base_cfg.A;
+	delete base_cfg.B;
+	delete base_cfg.res;
+
+	return clock.get_ns_between();
 }
 
 double percent_of_theoretical_flops(size_t ns, size_t work_count) {
 	return calc_tflops(ns, work_count) / calc_theoretical_tflops() * 100.0;
 }
 
-template <typename T>
-static inline const char *to_cstr(T val) {
-	string* s = new string(std::to_string(val));
-	return s->c_str();
-}
 
 struct Worker {
 
@@ -269,6 +232,7 @@ struct Worker {
 	size_t ns_outer;
 	int col_width = 12;
 	vector<vector<string>> results;
+
 
 	void do_work(size_t N) {
 		this->N = N;
@@ -279,15 +243,15 @@ struct Worker {
 		ns_outer = outer_clock.get_ns_between();
 	}
 
-	void calc_results(){
+	void calc_results() {
 		size_t flops = calc_flops(ns, N);
 		results.push_back({
 			minify_number(N, 5),
 			minify_unit(N*sizeof(work_t), 1, 2) + "B",
 			comma_separate(ns / 1'000'000) + "ms",
 			comma_separate(ns_outer / 1'000'000) + "ms",
-			minify_unit(flops, 2, 2),
-			to_string(percent_of_theoretical_flops(ns, N)) + "%"
+			minify_unit(flops, 3, 2),
+			float_to_str(percent_of_theoretical_flops(ns, N), 2) + "%"
 		});
 	}
 	void print_results() {
@@ -299,30 +263,52 @@ struct Worker {
 		}
 	}
 };
-int main() {
 
-	CLOCK prog_clock;
-	prog_clock.start();
+
+CLOCK prog_clock;
+
+void test_n_threads(size_t N) {
+	assert(N > 1 || "Must have at least 1 thread");
+	settings = {N};
+	settings.print();
+	double total_ns_elapsed = 0;
+	size_t total_work_completed = 0;
+	double max_gflops = 0;
 	vector<Worker> workers;
-	for (size_t N = 100; N < 10'000'000; N = N*1.5) {
+	for (size_t N = MIN_N; N < MAX_N; N = N * 1.3) {
 		Worker w;
 		w.do_work(N);
 		workers.push_back(w);
+		max_gflops = fmax(max_gflops, calc_gflops(w.ns, w.N));
 	}
 
 	Worker w = workers[0];
-	printf("%-*.*s ", w.col_width, w.col_width, "N");
-	printf("%-*.*s ", w.col_width, w.col_width, "INPUT SZ");
-	printf("%-*.*s ", w.col_width, w.col_width, "MS CALC");
-	printf("%-*.*s ", w.col_width, w.col_width, "MS OVERALL");
-	printf("%-*.*s ", w.col_width, w.col_width, "FLOPS");
-	printf("%-*.*s ", w.col_width, w.col_width, "% POSSIBLE FLOPS");
-	printf("\n");
-	for (auto w : workers){
-		w.calc_results();
-		w.print_results();
+
+	//printf("%-*.*s ", w.col_width, w.col_width, "N");
+	//printf("%-*.*s ", w.col_width, w.col_width, "INPUT SZ");
+	//printf("%-*.*s ", w.col_width, w.col_width, "MS CALC");
+	//printf("%-*.*s ", w.col_width, w.col_width, "MS OVERALL");
+	//printf("%-*.*s ", w.col_width, w.col_width, "FLOPS");
+	//printf("%-*.*s ", w.col_width, w.col_width, "%FLOPS");
+
+	//printf("\n");
+	for (auto w : workers) {
+		total_ns_elapsed += w.ns;
+		total_work_completed += w.N;
+		//	w.calc_results();
+		//	w.print_results();
 	}
-	printf("----------\ntook %0.2lfs\n", prog_clock.s_since_start());
+	//printf("----------\ntook %0.2lfs so far, this run:\n", prog_clock.s_since_start());
+	printf("%0.3lf\t%0.3lf\t", calc_gflops(total_ns_elapsed, total_work_completed), max_gflops);
+}
+
+int main() {
+	prog_clock.start();
+
+	printf("avg flops\tmax flops\ttcount\n");
+	for (size_t n = MIN_THREADS; n <= MAX_THREADS; n++)
+		test_n_threads(n);
+	printf("----------\ntook %0.2lfs so far, this run:\n", prog_clock.s_since_start());
 
 }
 

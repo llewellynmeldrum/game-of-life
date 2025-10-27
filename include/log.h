@@ -1,5 +1,5 @@
-#ifndef LOG_H
-#define LOG_H
+#ifndef _log_H
+#define _log_H
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,8 +9,6 @@
 #define adjust 10'000'000
 #define msleep(ms) usleep(ms*1000)
 
-#define min(a,b) (a<=b?a:b)
-#define max(a,b) (a>=b?a:b)
 // useful macro helpers
 #define __MACRO_TO_STR(ARG) 	#ARG
 #define MACRO_TO_STR(ARG)	__MACRO_TO_STR(ARG)
@@ -19,7 +17,7 @@
 #ifdef DEBUG_PRINTING
 #define potential_sleep(ms)do{\
 /*		vec2 temp = getcurpos();\
-//		log("%0d,%0d",cury(),curx());\
+//		_log("%0d,%0d",cury(),curx());\
 		mvcurv(debug_pos);\
 */		usleep(ms*1000);\
 		refresh();\
@@ -33,35 +31,35 @@ extern char copybuf[];
 
 
 ssize_t GET_TERM_COLS();
-void LOG_UPPER_SEPARATOR();
-void LOG_LOWER_SEPARATOR();
+void _log_UPPER_SEPARATOR();
+void _log_LOWER_SEPARATOR();
 void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_print);
 #define pretty_print_buffer(title, buf, lncount) dprintbuf(title, buf, strlen(buf), lncount);
 
 
 #define NOP do{}while(0)
-#ifdef DISABLE_LOG
-	#define log(fmt, ...) NOP
+#ifdef DISABLE__log
+	#define _log(fmt, ...) NOP
 #else
-	#define log(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+	#define _log(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #endif
 
 
-#define logexit(n)do {				\
-	if(n == EXIT_SUCCESS){ log(SET_GREEN);}	\
-	else {log(SET_RED);}			\
-	log("\nExiting...%s\n\n",SET_CLEAR);	\
+#define _logexit(n)do {				\
+	if(n == EXIT_SUCCESS){ _log(SET_GREEN);}	\
+	else {_log(SET_RED);}			\
+	_log("\nExiting...%s\n\n",SET_CLEAR);	\
 	exit(n);				\
 	} while(0)
 
 
-#define logerrno() do{			\
-	log("ERRNO(%d):",errno);	\
+#define _logerrno() do{			\
+	_log("ERRNO(%d):",errno);	\
 	perror("");			\
 	}while(0)
 
 
-/* functions can define FN_NAME to idenify themselves in logging:
+/* functions can define FN_NAME to idenify themselves in _logging:
  * 	- any FATAL messages,
  *   	- any WARNING messages (planned)
  *   	- any CRIT_WARNING messages (planned)
@@ -70,57 +68,57 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
 #define ALLOC_FAILURE(resource) "Failed to allocate memory for '%s'!\n", #resource
 #ifdef FN_NAME
 
-#define logfatal(fmt, ...) do{							\
-	log("\n\033[31;1m[FATAL ERROR IN " FN_NAME "] ->\033[0m \033[31m");	\
-	log(fmt, ##__VA_ARGS__);						\
-	log("\033[0m");								\
+#define _logfatal(fmt, ...) do{							\
+	_log("\n\033[31;1m[FATAL ERROR IN " FN_NAME "] ->\033[0m \033[31m");	\
+	_log(fmt, ##__VA_ARGS__);						\
+	_log("\033[0m");								\
 	}while(0)
 
 #else
-#define logfatal(fmt, ...) do{					\
-	log("\n\033[31;1m[FATAL ERROR] ->\033[0m \033[31m");	\
-	log(fmt, ##__VA_ARGS__);				\
-	log("\033[0m");						\
+#define _logfatal(fmt, ...) do{					\
+	_log("\n\033[31;1m[FATAL ERROR] ->\033[0m \033[31m");	\
+	_log(fmt, ##__VA_ARGS__);				\
+	_log("\033[0m");						\
 	}while(0)
 
 #endif
-#define logsdl(fmt, ...) do{					\
-	log("\n\033[31;1m[SDL ERROR] ->\033[0m \033[31m");	\
-	log(fmt, ##__VA_ARGS__);				\
-	log(": %s",SDL_GetError());				\
-	log("\033[0m");						\
+#define _logsdl(fmt, ...) do{					\
+	_log("\n\033[31;1m[SDL ERROR] ->\033[0m \033[31m");	\
+	_log(fmt, ##__VA_ARGS__);				\
+	_log(": %s",SDL_GetError());				\
+	_log("\033[0m");						\
 	}while(0)
 
-#define logsdl_exit(fmt, ...) do{					\
-	log("\n\033[31;1m[SDL ERROR] ->\033[0m \033[31m");	\
-	log(fmt, ##__VA_ARGS__);				\
-	log(": %s",SDL_GetError());				\
-	log("\033[0m");						\
-	logexit(EXIT_FAILURE);						\
+#define _logsdl_exit(fmt, ...) do{					\
+	_log("\n\033[31;1m[SDL ERROR] ->\033[0m \033[31m");	\
+	_log(fmt, ##__VA_ARGS__);				\
+	_log(": %s",SDL_GetError());				\
+	_log("\033[0m");						\
+	_logexit(EXIT_FAILURE);						\
 	}while(0)
 
-#define logfatalerrno(fmt, ...) do{	\
-	logfatal(fmt, ##__VA_ARGS__);	\
-	logerrno();			\
-	log("\033[0m");			\
+#define _logfatalerrno(fmt, ...) do{	\
+	_logfatal(fmt, ##__VA_ARGS__);	\
+	_logerrno();			\
+	_log("\033[0m");			\
 	}while(0)			\
 
-#define logfatal_exit(fmt, ...) do{	\
-	logfatal(fmt, ##__VA_ARGS__);	\
-	logexit(1);			\
+#define _logfatal_exit(fmt, ...) do{	\
+	_logfatal(fmt, ##__VA_ARGS__);	\
+	_logexit(1);			\
 	}while(0)
 
-#define logfatalerrno_exit(fmt, ...) do{	\
-	logfatalerrno(fmt, ##__VA_ARGS__);	\
-	logexit(1);				\
+#define _logfatalerrno_exit(fmt, ...) do{	\
+	_logfatalerrno(fmt, ##__VA_ARGS__);	\
+	_logexit(1);				\
      	exit(1);				\
 	}while(0)
 
-#define logwarning(fmt, ...)do {		\
-	log(SET_ORANGE);			\
-	log("\n[WARNING!]%s\n",SET_CLEAR);	\
-	log(SET_BOLD);				\
-	log(fmt, ##__VA_ARGS__);		\
+#define _logwarning(fmt, ...)do {		\
+	_log(SET_ORANGE);			\
+	_log("\n[WARNING!]%s\n",SET_CLEAR);	\
+	_log(SET_BOLD);				\
+	_log(fmt, ##__VA_ARGS__);		\
 	} while(0)
 
 
@@ -154,7 +152,7 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
 
 #define SET(s) "\033["s"m"
 
-#define logln(fmt, ...) \
+#define _logln(fmt, ...) \
 fprintf(stderr, SET_BOLD"[%s:%d] %s %s " fmt, __FILE__, __LINE__, SET_CLEAR, ##__VA_ARGS__)
 
 #define _assert(truth) if(!(truth)) {__ASSERTION_FAILED(truth);}
@@ -164,21 +162,21 @@ fprintf(stderr, SET_RED SET_NOBOLD\
 	SET_CLEAR SET_UNDERLINE "%s() @%s:%d\n"	\
 	SET_CLEAR SET_BOLD "--> (%s) == " SET_RED SET_NOBOLD " FALSE\n\n",						\
 	__func__, __FILE__, __LINE__, #TRUTH);				\
-	logexit(EXIT_FAILURE)
+	_logexit(EXIT_FAILURE)
 
-#define logfatal_ln_exit(fmt, ...) \
+#define _logfatal_ln_exit(fmt, ...) \
 fprintf(stderr, "%s%s%s[%s:%d] IN --> %s(): %s " fmt,		\
 		(SET_BOLD), (SET_RED), (SET_NOBOLD),		\
 		__FILE__, __LINE__, __func__, (SET_CLEAR)	\
 		, ##__VA_ARGS__);				\
-logexit(EXIT_FAILURE)
+_logexit(EXIT_FAILURE)
 
 
-#define logfn(fmt, ...) \
+#define _logfn(fmt, ...) \
 fprintf(stderr,"[%s:%d:%s()]: " fmt, __FILE__, __LINE__, __func__,##__VA_ARGS__)
 
-#endif // LOG_H
-/* PROPOSED LOGGING LEVELS:
+#endif // _log_H
+/* PROPOSED _logGING LEVELS:
 
 	FATAL;
 	-> PREFIX: (bold, red) "[FATAL/UNRECOVERABLE ERROR] --> %s", body_text
@@ -191,7 +189,7 @@ fprintf(stderr,"[%s:%d:%s()]: " fmt, __FILE__, __LINE__, __func__,##__VA_ARGS__)
 	CRIT_WARNING;
 	-> PREFIX: (bold, underlined(?), yellow) "[CRITICAL WARNING] --> %s", body_text
 	-> BODY TEXT: (yellow) "..."
-		A critical warning; i.e something which should stand out when reading logs,
+		A critical warning; i.e something which should stand out when reading _logs,
 		but is not necessarily more pertinent/threatening than a warning.
         <------------------------------------------------------------------------------------------>
 
@@ -205,7 +203,7 @@ fprintf(stderr,"[%s:%d:%s()]: " fmt, __FILE__, __LINE__, __func__,##__VA_ARGS__)
 	STANDARD;
 	-> PREFIX: (n/a)
 	-> BODY TEXT: (n/a) "..."
-		The default logging level, shows up no matter what.
+		The default _logging level, shows up no matter what.
         <------------------------------------------------------------------------------------------>
 
 	DEBUG;

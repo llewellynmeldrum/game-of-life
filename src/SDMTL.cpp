@@ -61,8 +61,8 @@ void GOL::mtl_init(const char* shader_src_path) {
 
 	auto pipeline_descriptor = MTL::RenderPipelineDescriptor::alloc()->init();
 	if (!pipeline_descriptor) {
-		logfatal("Failed to create pipeline!\n");
-		logexit(EXIT_FAILURE);
+		_logfatal("Failed to create pipeline!\n");
+		_logexit(EXIT_FAILURE);
 	}
 
 	auto vert_fn = setup_vertex_fn(lib, pipeline_descriptor, "vertex_shader");
@@ -73,8 +73,8 @@ void GOL::mtl_init(const char* shader_src_path) {
 	pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(pixel_format);
 	mtl.render_pipeline_state = mtl.device->newRenderPipelineState(pipeline_descriptor, &err);
 	if (!mtl.render_pipeline_state) {
-		logfatal("Failed to create pipeline state!\n");
-		logexit(EXIT_FAILURE);
+		_logfatal("Failed to create pipeline state!\n");
+		_logexit(EXIT_FAILURE);
 	}
 
 	mtl.gen_a = GOL::create_texture();
@@ -123,17 +123,17 @@ MTL::Texture *GOL::create_texture() {
 void GOL::sdl_init() {
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
 	if (SDL_Init(SDL_INIT_EVERYTHING)) {
-		logsdl("Failed to initialize SDL");
-		logexit(EXIT_FAILURE);
+		_logsdl("Failed to initialize SDL");
+		_logexit(EXIT_FAILURE);
 	}
 	int render_flags = 0;
 	int window_flags = SDL_WINDOW_SHOWN & SDL_WINDOW_METAL & SDL_WINDOW_INPUT_FOCUS;
 
 	sdl.win = SDL_CreateWindow("Metal hello world", 0, 0, sdl.width_px, sdl.height_px, window_flags);
-	if (!sdl.win) logsdl_exit("Failed to initialize window");
+	if (!sdl.win) _logsdl_exit("Failed to initialize window");
 
 	sdl.renderer = SDL_CreateRenderer(sdl.win, -1, render_flags);
-	if (!sdl.renderer) logsdl_exit("Failed to initialize renderer");
+	if (!sdl.renderer) _logsdl_exit("Failed to initialize renderer");
 
 }
 
@@ -198,19 +198,19 @@ void GOL::mtl_draw() {
 MTL::Library *GOL::load_mtl_lib_from_src(const char* msl_path) {
 	char *msl_src = read_file(msl_path);
 	if (!msl_src) {
-		logsdl("Failed to read file '%s' \n", msl_path);
-		logexit(EXIT_FAILURE);
+		_logsdl("Failed to read file '%s' \n", msl_path);
+		_logexit(EXIT_FAILURE);
 	}
-	//log("read file successfully:\n\n%s\n\n", msl_src);
+	//_log("read file successfully:\n\n%s\n\n", msl_src);
 	auto msl_src_ascii = NS::String::string(msl_src, NS::ASCIIStringEncoding);
 
-	//logwarning("converted file \n");
+	//_logwarning("converted file \n");
 	auto compile_opts = MTL::CompileOptions::alloc()->init();
 	MTL::Library* lib = mtl.device->newLibrary(msl_src_ascii, compile_opts, &err);
 	if (!lib) {
-		logfatal("Failed to initialize library '%s'.", msl_path);
-		logfn("\n%s:%s\n", err->domain()->utf8String(), err->localizedDescription()->utf8String());
-		logexit(EXIT_FAILURE);
+		_logfatal("Failed to initialize library '%s'.", msl_path);
+		_logfn("\n%s:%s\n", err->domain()->utf8String(), err->localizedDescription()->utf8String());
+		_logexit(EXIT_FAILURE);
 	}
 	free(msl_src);
 	compile_opts->release();
@@ -271,31 +271,31 @@ char *read_file(const char* filename) {
 	FILE * file_ptr = fopen(filename, "rb");
 
 	if (!file_ptr) {
-		logfatalerrno("Unable to open file '%s'.\n", filename);
+		_logfatalerrno("Unable to open file '%s'.\n", filename);
 		return NULL;
 	}
 	if (file_size == 0) {
 		fclose(file_ptr);
-		logfatal("file '%s' is empty!\n", filename);
+		_logfatal("file '%s' is empty!\n", filename);
 		return NULL;
 	}
 
 
 	if (file_size > MAX_FILE_SZ) {
-		logfatal("Requested file '%s' is too large! (%zu>%zu)\n", filename, file_size, MAX_FILE_SZ);
+		_logfatal("Requested file '%s' is too large! (%zu>%zu)\n", filename, file_size, MAX_FILE_SZ);
 		fclose(file_ptr);
 		return NULL;
 	}
 	char *file_contents = (char*)calloc(file_size + 1, sizeof(char));
 	if (!file_contents) {
-		logfatal("Unable to alloc buffer for file '%s'.\n", filename);
+		_logfatal("Unable to alloc buffer for file '%s'.\n", filename);
 		fclose(file_ptr);
 		return NULL;
 	}
 
 	int n_read = fread(file_contents, file_size, 1, file_ptr);
 	if (n_read != 1) {
-		logfatal("Unable to read file contents for file '%s'.\n", filename);
+		_logfatal("Unable to read file contents for file '%s'.\n", filename);
 		free(file_contents);
 		fclose(file_ptr);
 		return NULL;

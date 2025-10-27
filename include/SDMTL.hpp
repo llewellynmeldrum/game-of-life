@@ -7,9 +7,16 @@
 #include <QuartzCore/CAMetalLayer.hpp>
 #include <QuartzCore/QuartzCore.hpp>
 #include <simd/simd.h>
+#include <iostream>
 
 // windowing, input
 #include <SDL.h>
+using std::vector;
+using std::string;
+using std::to_string;
+using work_t = float;
+using std::cout;
+using std::endl;
 
 ssize_t syscall_file_size(const char* filename);
 char *read_file(const char* filename);
