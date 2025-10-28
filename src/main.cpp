@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <random>
 #include <unistd.h>
@@ -17,15 +18,18 @@
 #include <pthread/qos.h>
 #include <typeindex>
 #include <any>
+#include "machsysinfo.hpp"
 #define bitsof(T)	(sizeof(T)*8)
+constexpr bool SET_QOS_INTERACTIVE = true;
+constexpr bool PRINT_SYS_INFO = true;
+constexpr bool CHECK_WORK = true;
 constexpr size_t MIN_N = 1'000;
-constexpr size_t MAX_N = 100'000'000;
-const size_t MIN_THREADS = 1;
-const size_t MAX_THREADS = 256;
+constexpr size_t MAX_N = 10'000'000;
+constexpr size_t THREAD_COUNT = 16;
 struct Settings {
 
 	size_t thread_count;
-	Settings(): thread_count(MIN_THREADS) {};
+	Settings(): thread_count(THREAD_COUNT) {};
 
 	Settings(size_t tc) : thread_count(tc) {
 	};
@@ -37,7 +41,6 @@ struct Settings {
 	void print() {
 //		printf("SETTINGS:\n");
 //		print_as("WORKER THREAD COUNT:", thread_count);
-		cout << thread_count << endl;
 	}
 
 	static const int col_w = 20;
@@ -49,7 +52,6 @@ constexpr auto EPSILON = std::numeric_limits<work_t>::epsilon();
 constexpr size_t MAX_STACK_ALLOWANCE = 2'000'000; /* unused */
 constexpr work_t WORK_RAND_MIN = -1'000'000;
 constexpr work_t WORK_RAND_MAX = 1'000'000;
-constexpr bool CHECK_WORK = true;
 
 struct thread_cfg {
 	pthread_t thread;
@@ -62,15 +64,6 @@ struct thread_cfg {
 
 
 
-
-class MCPU_INFO {
-// TODO:
-// - before anything, reorganize this file, it is a mess
-// - create methods to fill fields like cpu freq, cores, etc
-// - use systemctl
-  public:
-	void query_sysctl();
-};
 
 
 bool float_equals(work_t a, work_t b) {
@@ -124,8 +117,7 @@ static inline double calc_tflops(size_t ns_elapsed, size_t ops_completed) {
 
 static inline double calc_theoretical_tflops() {
 	// lookup table based on device id or something is the only other way i can think to do this
-	// i use an m1 pro so this is a starting point
-	// also this is FP32
+	// i use an m1 pro so this is a starting point (also this is FP32)
 	return 5.3;
 }
 
@@ -134,7 +126,7 @@ static inline work_t work(work_t a, work_t b) {
 }
 
 void *work_n_times(void* v_args) {
-	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+	if constexpr (SET_QOS_INTERACTIVE) pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
 	thread_cfg* args = (thread_cfg*)v_args;
 	for (int i = args->start; i < args->end; i++) {
 		args->res->at(i) = work(args->A->at(i), args->B->at(i));
@@ -194,15 +186,13 @@ size_t ns_to_do_work(size_t work_count) {
 			case EDEADLK:
 				s = "A deadlock was detected or the value of thread specifies the calling thread.";
 				_logfatal("%s\n", s.c_str());
-				_logfatal("main thread_id: %p\n", pthread_self());
 				break;
 			}
 			_logfatalerrno_exit("Failed to join t%lu, err=%d\n", i, err);
 		}
 	}
 	clock.stop();
-	if (CHECK_WORK)
-		check_work(*base_cfg.A, *base_cfg.B, *base_cfg.res);
+	if constexpr (CHECK_WORK) check_work(*base_cfg.A, *base_cfg.B, *base_cfg.res);
 
 	for (size_t t = 0; t < thread_count; t++) {
 		delete cfg_list[t];
@@ -275,6 +265,11 @@ void test_n_threads(size_t N) {
 	size_t total_work_completed = 0;
 	double max_gflops = 0;
 	vector<Worker> workers;
+	//warmup run
+	for (size_t N = MIN_N; N < MAX_N; N = N * 1.3) {
+		Worker w;
+		w.do_work(N);
+	}
 	for (size_t N = MIN_N; N < MAX_N; N = N * 1.3) {
 		Worker w;
 		w.do_work(N);
@@ -299,15 +294,18 @@ void test_n_threads(size_t N) {
 		//	w.print_results();
 	}
 	//printf("----------\ntook %0.2lfs so far, this run:\n", prog_clock.s_since_start());
-	printf("%0.3lf\t%0.3lf\t", calc_gflops(total_ns_elapsed, total_work_completed), max_gflops);
+	printf("%0.3lf\t%0.3lf\t%zu\n", calc_gflops(total_ns_elapsed, total_work_completed), max_gflops, N);
 }
 
 int main() {
+	SystemInfo sysinfo;
+	if constexpr (PRINT_SYS_INFO) sysinfo.print_all();
+	if constexpr (SET_QOS_INTERACTIVE) printf("QOS_INTERACTIVE OPT ENAVLED\n");
 	prog_clock.start();
 
 	printf("avg flops\tmax flops\ttcount\n");
-	for (size_t n = MIN_THREADS; n <= MAX_THREADS; n++)
-		test_n_threads(n);
+	for (size_t n = 0; n <= 100; n++)
+		test_n_threads(THREAD_COUNT);
 	printf("----------\ntook %0.2lfs so far, this run:\n", prog_clock.s_since_start());
 
 }
