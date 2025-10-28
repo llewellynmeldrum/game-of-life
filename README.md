@@ -1,9 +1,7 @@
-Got sidetracked looking into benchmarking FP32 on the cpu, and then the gpu to learn about cache and whatnot
-- Read somewhere that the M1 is optimized for FP16 and FP32, so i'll be using those in the future.
-> [!NOTE]
-> All benchmarks are performed on my own 2021, 14in M1 Pro, (16GB ram, 16 core GPU)
-
+# Optimising a very simple problem
 **Problem: you have 3 contiguous arrays, A, B and res. Fill res with the product of A and B at every index.**
+
+
 
 Problem is obviously O(N), and I dont see anything changing that. What I would like to do is see how far I can optimize this problem from a baseline.
 
@@ -14,6 +12,9 @@ void work(size_t index, vector<work_t> &A, vector<work_t> &B, vector<work_t> &re
 	res[index] = A[index] * B[index];
 }
 ```
+> [!NOTE]
+> All benchmarks are performed on my own 2021, 14in M1 Pro, which is configured with 16GB ram, a 10 core CPU, (8P 2E) 16 core GPU)
+
 ```
 // compiled with -O0. Zero vectorization, 1 thread, all on cpu.
 N               MS CALC         MS OVERALL      FLOPS           % POSSIBLE FLOP
@@ -67,10 +68,38 @@ Performance cores:
 - Sadly, theres no super observable cache boundaries in our graph.
 - Im not sure exactly why this would occur, but my best guess is that context switches, thread migration, and other things I failed to control for contributed to this noise.
 - Ill have to do more runs, especially on the lower end, in order to get some averages which I can have a look at
+# Optimizing:
+## 1: multithreading on the cpu
+1st step is to figure out how many threads is optimal for my m1.
+The below figures show average and max GFLOPS recorded with the following params:
+```
+constexpr size_t MIN_N = 1'000;
+constexpr size_t MAX_N = 100'000'000;
+```
 
-# 1st optimisation: multithreading
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/b80e9d35-06aa-48d9-999b-8442b334349f" />
 
-<img width="700" alt="image" src="https://github.com/user-attachments/assets/b80e9d35-06aa-48d9-999b-8442b334349f" />
+Initially, it seems like the best range is around 10-20. 
+
+<img width="600" height="503" alt="image" src="https://github.com/user-attachments/assets/ee2803a4-091c-429f-980c-5c4e17c63406" />
+
+Taking a closer look, the average peaks at 8 and 16. 
+The peak at 8 is most likely due to that being our physical P core count. Im making a call to ask for priority by setting my Priority Of Service class to QOS_CLASS_USER_INTERACTIVE, which is the highest avaliable to userland in macos. This should heavily prioritize towards p cores.
+
+**Infact, lets see if that has any real impact on perf:**
+```
+WITHOUT QOS (16 threads, N=[10,10'000'000], 100 runs )			
+	average	stdev	
+avg gflops	3.555	0.108	
+max gflops	7.110	0.352	
+
+WITH QOS (16 threads, N=[10,10'000'000], 100 runs )			
+	        average	stdev	
+avg gflops	3.513	0.368	
+max gflops	7.182	0.343	
+```
+Extremely similar perf, maybe a slightly more consistent average when its disabled. Inconclusive.
+
 
 # References:
 
